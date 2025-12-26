@@ -2,6 +2,11 @@
 name = "rejoice"
 version.workspace = true
 edition.workspace = true
+description = "A simple and delightful little web framework for Rust"
+license = "MIT"
+repository = "https://github.com/kiahjh/rejoice"
+keywords = ["web", "framework", "routing", "axum"]
+categories = ["web-programming::http-server"]
 
 [dependencies]
 axum = { version = "0.8.4", features = ["macros", "ws"] }
