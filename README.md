@@ -1,6 +1,6 @@
 # Rejoice
 
-A simple conglomeration of tools for building server-rendered web apps in Rust.
+A simple framework for building server-rendered web apps in Rust.
 
 ## Uses
 
