@@ -1,5 +1,9 @@
-use axum::response::Html;
+use rejoice::{html, Markup};
 
-pub async fn handler() -> Html<&'static str> {
-    Html("<h1>About</h1>")
+pub async fn handler() -> Markup {
+    html! {
+        h1 { "About" }
+        p { "This is an example app built with Rejoice." }
+        a href="/" { "Back home" }
+    }
 }

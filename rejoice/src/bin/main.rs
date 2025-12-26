@@ -57,6 +57,7 @@ edition = "2024"
 
 [dependencies]
 axum = "0.8"
+maud = {{ version = "0.27", features = ["axum"] }}
 rejoice = "{}"
 tokio = {{ version = "1.48.0", features = ["full"] }}
 
@@ -88,10 +89,12 @@ async fn main() {
     std::fs::write(project_dir.join("src/main.rs"), main_rs).expect("Failed to write main.rs");
 
     // Write index route
-    let index_rs = r#"use axum::response::Html;
+    let index_rs = r#"use rejoice::{html, Markup};
 
-pub async fn handler() -> Html<&'static str> {
-    Html("<h1>Welcome to Rejoice!</h1>")
+pub async fn handler() -> Markup {
+    html! {
+        h1 { "Welcome to Rejoice!" }
+    }
 }
 "#;
     std::fs::write(project_dir.join("src/routes/index.rs"), index_rs)

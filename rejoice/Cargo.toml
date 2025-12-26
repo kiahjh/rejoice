@@ -12,6 +12,7 @@ categories = ["web-programming::http-server"]
 axum = { version = "0.8.4", features = ["macros", "ws"] }
 dotenvy_macro = "0.15.7"
 futures = "0.3"
+maud = { version = "0.27", features = ["axum"] }
 notify = { version = "8.2.0", features = ["macos_fsevent"] }
 sqlx = { version = "0.8", features = [
     "runtime-tokio",

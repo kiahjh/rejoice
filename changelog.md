@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.0
+
+- Added Maud for HTML templating
+
 ## 0.2.2
 
 -- Less verbose output for `rejoice dev`

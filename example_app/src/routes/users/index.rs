@@ -1,5 +1,13 @@
-use axum::response::Html;
+use rejoice::{html, Markup};
 
-pub async fn handler() -> Html<&'static str> {
-    Html("<h1>Users List</h1>")
+pub async fn handler() -> Markup {
+    html! {
+        h1 { "Users" }
+        ul {
+            li { a href="/users/1" { "User 1" } }
+            li { a href="/users/2" { "User 2" } }
+            li { a href="/users/3" { "User 3" } }
+        }
+        a href="/" { "Back home" }
+    }
 }

@@ -7,4 +7,5 @@ A simple framework for building server-rendered web apps in Rust.
 - [Axum](https://github.com/tokio-rs/axum) (web framework)
 - [SQLite](https://www.sqlite.org) (database)
 - [SQLx](https://github.com/launchbadge/sqlx) (ORM)
+- [Maud](https://maud.lambda.xyz/) (HTML templating)
 - [SolidJS](https://www.solidjs.com) (client-side interactivity)
