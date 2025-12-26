@@ -25,7 +25,7 @@ fn main() {
             eprintln!("Usage: rejoice <command>");
             eprintln!("Commands:");
             eprintln!("  init [name]  Create a new rejoice project");
-            eprintln!("  dev          Start development server with auto-reload");
+            eprintln!("  dev          Start development server");
             std::process::exit(1);
         }
     }
@@ -111,10 +111,7 @@ pub async fn handler() -> Html<&'static str> {
     let db_absolute_path = std::fs::canonicalize(&db_path).expect("Failed to get absolute path");
 
     // Write .env
-    let dotenv = format!(
-        "DATABASE_URL=sqlite:{}\n",
-        db_absolute_path.display()
-    );
+    let dotenv = format!("DATABASE_URL=sqlite:{}\n", db_absolute_path.display());
     std::fs::write(project_dir.join(".env"), dotenv).expect("Failed to write .env");
 
     println!("Project created successfully!");
