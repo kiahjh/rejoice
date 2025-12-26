@@ -1,6 +1,6 @@
 # Rejoice
 
-A simple stack for building server-rendered web apps in Rust.
+A simple conglomeration of tools for building server-rendered web apps in Rust.
 
 ## Uses
 
