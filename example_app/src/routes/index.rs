@@ -1,4 +1,4 @@
-use rejoice::{DOCTYPE, Markup, html};
+use rejoice::{DOCTYPE, Markup, html, island};
 
 pub async fn handler() -> Markup {
     html! {
@@ -10,6 +10,10 @@ pub async fn handler() -> Markup {
             body {
                 h1 { "Welcome to Rejoice!" }
                 p { "A simple and delightful web framework for Rust." }
+
+                h2 { "Interactive Counter (SolidJS Island)" }
+                (island!(Counter, { "initial": 5 }))
+
                 nav {
                     a href="/about" { "About" }
                     " | "

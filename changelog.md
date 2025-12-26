@@ -1,12 +1,16 @@
 # Changelog
 
+## 0.4.0
+
+- Island architecture using SolidJS
+
 ## 0.3.0
 
 - Added Maud for HTML templating
 
 ## 0.2.2
 
--- Less verbose output for `rejoice dev`
+- Less verbose output for `rejoice dev`
 
 ## 0.2.1
 

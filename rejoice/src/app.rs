@@ -3,9 +3,11 @@ use axum::{
     body::Body,
     http::{Request, Response, header},
 };
+use std::path::Path;
 use std::task::{Context, Poll};
 use tower::{Layer, Service, ServiceBuilder};
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::services::ServeDir;
 
 pub struct App {
     port: u16,
@@ -15,8 +17,17 @@ pub struct App {
 impl App {
     pub fn new(port: u16, router: Router) -> Self {
         let dev_mode = std::env::var("REJOICE_DEV").is_ok();
+        let has_islands = Path::new("dist/islands.js").exists();
 
-        let mut router = router.layer(
+        // Serve static files from dist/ directory (built JS)
+        let static_dir = Path::new("dist");
+        let mut router = if static_dir.exists() {
+            router.nest_service("/static", ServeDir::new(static_dir))
+        } else {
+            router
+        };
+
+        router = router.layer(
             ServiceBuilder::new().layer(
                 CorsLayer::new()
                     .allow_headers(Any)
@@ -25,10 +36,8 @@ impl App {
             ),
         );
 
-        // Add live reload middleware in dev mode
-        if dev_mode {
-            router = router.layer(LiveReloadLayer);
-        }
+        // Add script injection middleware
+        router = router.layer(ScriptInjectionLayer { dev_mode, has_islands });
 
         Self { port, router }
     }
@@ -48,23 +57,34 @@ const LIVE_RELOAD_SCRIPT: &str = concat!(
     "</script>"
 );
 
-#[derive(Clone)]
-pub struct LiveReloadLayer;
+const ISLAND_SCRIPT: &str = r#"<script type="module" src="/static/islands.js"></script>"#;
 
-impl<S> Layer<S> for LiveReloadLayer {
-    type Service = LiveReloadMiddleware<S>;
+#[derive(Clone)]
+pub struct ScriptInjectionLayer {
+    dev_mode: bool,
+    has_islands: bool,
+}
+
+impl<S> Layer<S> for ScriptInjectionLayer {
+    type Service = ScriptInjectionMiddleware<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        LiveReloadMiddleware { inner }
+        ScriptInjectionMiddleware {
+            inner,
+            dev_mode: self.dev_mode,
+            has_islands: self.has_islands,
+        }
     }
 }
 
 #[derive(Clone)]
-pub struct LiveReloadMiddleware<S> {
+pub struct ScriptInjectionMiddleware<S> {
     inner: S,
+    dev_mode: bool,
+    has_islands: bool,
 }
 
-impl<S> Service<Request<Body>> for LiveReloadMiddleware<S>
+impl<S> Service<Request<Body>> for ScriptInjectionMiddleware<S>
 where
     S: Service<Request<Body>, Response = Response<Body>> + Clone + Send + 'static,
     S::Future: Send,
@@ -81,6 +101,9 @@ where
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
         let mut inner = self.inner.clone();
+        let dev_mode = self.dev_mode;
+        let has_islands = self.has_islands;
+        
         Box::pin(async move {
             let response = inner.call(req).await?;
 
@@ -96,7 +119,20 @@ where
                 return Ok(response);
             }
 
-            // Read the body and inject the script
+            // Build the scripts to inject
+            let mut scripts = String::new();
+            if has_islands {
+                scripts.push_str(ISLAND_SCRIPT);
+            }
+            if dev_mode {
+                scripts.push_str(LIVE_RELOAD_SCRIPT);
+            }
+
+            if scripts.is_empty() {
+                return Ok(response);
+            }
+
+            // Read the body and inject the scripts
             let (parts, body) = response.into_parts();
             let bytes = axum::body::to_bytes(body, usize::MAX)
                 .await
@@ -105,9 +141,9 @@ where
 
             // Inject before </body> if present, otherwise append
             let modified = if html.contains("</body>") {
-                html.replace("</body>", &format!("{}</body>", LIVE_RELOAD_SCRIPT))
+                html.replace("</body>", &format!("{}</body>", scripts))
             } else {
-                format!("{}{}", html, LIVE_RELOAD_SCRIPT)
+                format!("{}{}", html, scripts)
             };
 
             let new_body = Body::from(modified);

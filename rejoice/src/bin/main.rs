@@ -46,6 +46,7 @@ fn init_command(name: Option<&String>) {
 
     // Create directory structure
     std::fs::create_dir_all(project_dir.join("src/routes")).expect("Failed to create directories");
+    std::fs::create_dir_all(project_dir.join("client")).expect("Failed to create client directory");
 
     // Write Cargo.toml
     let rejoice_version = env!("CARGO_PKG_VERSION");
@@ -88,21 +89,100 @@ async fn main() {
 "#;
     std::fs::write(project_dir.join("src/main.rs"), main_rs).expect("Failed to write main.rs");
 
-    // Write index route
-    let index_rs = r#"use rejoice::{html, Markup};
+    // Write index route with island example
+    let index_rs = r#"use rejoice::{html, island, Markup, DOCTYPE};
 
 pub async fn handler() -> Markup {
     html! {
-        h1 { "Welcome to Rejoice!" }
+        (DOCTYPE)
+        html {
+            head {
+                title { "Welcome" }
+            }
+            body {
+                h1 { "Welcome to Rejoice!" }
+                p { "Click the button below - it's a SolidJS island!" }
+                (island!(Counter, { "initial": 0 }))
+            }
+        }
     }
 }
 "#;
     std::fs::write(project_dir.join("src/routes/index.rs"), index_rs)
         .expect("Failed to write index.rs");
 
+    // Write package.json
+    let package_json = r#"{
+  "name": "app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch"
+  },
+  "dependencies": {
+    "solid-js": "^1.9.5"
+  },
+  "devDependencies": {
+    "vite": "^6.3.5",
+    "vite-plugin-solid": "^2.11.6"
+  }
+}
+"#;
+    std::fs::write(project_dir.join("package.json"), package_json)
+        .expect("Failed to write package.json");
+
+    // Write vite.config.ts
+    let vite_config = r#"import { defineConfig } from "vite";
+import solid from "vite-plugin-solid";
+
+export default defineConfig({
+  plugins: [solid()],
+  build: {
+    outDir: "dist",
+    lib: {
+      entry: "client/islands.tsx",
+      name: "islands",
+      fileName: () => "islands.js",
+      formats: ["es"],
+    },
+    rollupOptions: {
+      output: {
+        inlineDynamicImports: true,
+      },
+    },
+  },
+});
+"#;
+    std::fs::write(project_dir.join("vite.config.ts"), vite_config)
+        .expect("Failed to write vite.config.ts");
+
+    // Write example Counter component
+    let counter_tsx = r#"import { createSignal } from "solid-js";
+
+interface CounterProps {
+  initial: number;
+}
+
+export default function Counter(props: CounterProps) {
+  const [count, setCount] = createSignal(props.initial);
+
+  return (
+    <button onClick={() => setCount((c) => c + 1)}>
+      Count: {count()}
+    </button>
+  );
+}
+"#;
+    std::fs::write(project_dir.join("client/Counter.tsx"), counter_tsx)
+        .expect("Failed to write Counter.tsx");
+
     // Write .gitignore
     let gitignore = format!(
         r#"/target
+/node_modules
+/dist
+/client/islands.tsx
 .env
 {}.db
 "#,
@@ -132,6 +212,45 @@ fn dev_command() {
 }
 
 async fn async_dev_command() {
+    // Check if client/ directory exists and set up JS build
+    let client_dir = Path::new("client");
+    let has_islands = client_dir.exists();
+    let mut vite_child: Option<Child> = None;
+
+    if has_islands {
+        // Generate islands.tsx from client/*.tsx files
+        generate_islands_registry();
+
+        // Check if node_modules exists, if not run npm install
+        if !Path::new("node_modules").exists() {
+            println!("Installing npm dependencies...");
+            let status = Command::new("npm")
+                .args(["install"])
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .status();
+
+            if status.is_err() || !status.unwrap().success() {
+                eprintln!("Failed to run npm install");
+                std::process::exit(1);
+            }
+        }
+
+        // Start vite build in watch mode
+        println!("Starting Vite build...");
+        vite_child = Some(
+            Command::new("npm")
+                .args(["run", "dev"])
+                .stdout(Stdio::null())
+                .stderr(Stdio::inherit())
+                .spawn()
+                .expect("Failed to start vite"),
+        );
+
+        // Give vite a moment to do initial build
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+
     // Channel for broadcasting reload signals to WebSocket clients
     let (reload_tx, _) = broadcast::channel::<()>(16);
     let reload_tx = Arc::new(reload_tx);
@@ -167,6 +286,13 @@ async fn async_dev_command() {
             .expect("Failed to watch Cargo.toml");
     }
 
+    // Watch client/ directory for island changes
+    if has_islands {
+        watcher
+            .watch(client_dir, RecursiveMode::Recursive)
+            .expect("Failed to watch client directory");
+    }
+
     // Start the app
     println!("Compiling...");
     let mut child = start_app();
@@ -182,6 +308,17 @@ async fn async_dev_command() {
                 match event.kind {
                     Create(_) | Modify(_) | Remove(_) => {
                         if last_restart.elapsed() > debounce_duration {
+                            // Check if it's a client file change
+                            let is_client_change = event.paths.iter().any(|p| {
+                                p.to_string_lossy().contains("/client/")
+                                    || p.to_string_lossy().contains("\\client\\")
+                            });
+
+                            if is_client_change && has_islands {
+                                // Regenerate islands registry if a new component was added
+                                generate_islands_registry();
+                            }
+
                             println!("Recompiling...");
 
                             // Kill the old process
@@ -212,6 +349,76 @@ async fn async_dev_command() {
             }
         }
     }
+
+    // Cleanup vite process
+    if let Some(mut vite) = vite_child {
+        let _ = vite.kill();
+    }
+}
+
+fn generate_islands_registry() {
+    let client_dir = Path::new("client");
+    let Ok(entries) = std::fs::read_dir(client_dir) else {
+        return;
+    };
+
+    let mut components: Vec<String> = Vec::new();
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if let Some(ext) = path.extension() {
+            if ext == "tsx" || ext == "jsx" {
+                if let Some(stem) = path.file_stem() {
+                    let name = stem.to_string_lossy().to_string();
+                    // Skip the islands.tsx file itself
+                    if name != "islands" {
+                        components.push(name);
+                    }
+                }
+            }
+        }
+    }
+
+    if components.is_empty() {
+        return;
+    }
+
+    // Generate islands.tsx
+    let mut output = String::new();
+    output.push_str("import { render } from \"solid-js/web\";\n\n");
+
+    // Import all components
+    for name in &components {
+        output.push_str(&format!("import {} from \"./{name}\";\n", name));
+    }
+
+    output.push_str("\nconst islands: Record<string, any> = {\n");
+    for name in &components {
+        output.push_str(&format!("  {},\n", name));
+    }
+    output.push_str("};\n\n");
+
+    output.push_str(
+        r#"function hydrateIslands() {
+  document.querySelectorAll("[data-island]").forEach((el) => {
+    const name = el.getAttribute("data-island");
+    const props = JSON.parse(el.getAttribute("data-props") || "{}");
+    const Component = islands[name!];
+    if (Component) {
+      render(() => <Component {...props} />, el);
+    }
+  });
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", hydrateIslands);
+} else {
+  hydrateIslands();
+}
+"#,
+    );
+
+    std::fs::write(client_dir.join("islands.tsx"), output).expect("Failed to write islands.tsx");
 }
 
 async fn run_reload_server(reload_tx: Arc<broadcast::Sender<()>>) {

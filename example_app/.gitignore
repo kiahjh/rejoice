@@ -1,0 +1,6 @@
+/target
+/node_modules
+/dist
+/client/islands.tsx
+.env
+*.db
