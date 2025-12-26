@@ -6,3 +6,7 @@ edition.workspace = true
 [dependencies]
 rejoice = { path = "../rejoice" }
 tokio = { version = "1.46.0", features = ["full"] }
+axum = { version = "0.8.4", features = ["macros"] }
+
+[build-dependencies]
+rejoice = { path = "../rejoice" }

@@ -1,5 +1,0 @@
-- [ ] file based routing
-- [ ] hmr
-- [ ] solidjs support
-- [ ] tailwind support
-- [ ] api endpoints
