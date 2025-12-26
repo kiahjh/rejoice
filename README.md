@@ -60,7 +60,7 @@ pub async fn handler() -> Markup {
         html {
             body {
                 h1 { "My Page" }
-                (island!(Counter, { "initial": 0 }))
+                (island!(Counter, { initial: 0 }))
             }
         }
     }

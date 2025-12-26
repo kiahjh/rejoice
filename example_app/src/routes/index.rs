@@ -12,7 +12,7 @@ pub async fn handler() -> Markup {
                 p { "A simple and delightful web framework for Rust." }
 
                 h2 { "Interactive Counter (SolidJS Island)" }
-                (island!(Counter, { "initial": 5 }))
+                (island!(Counter, { initial: 5 }))
 
                 nav {
                     a href="/about" { "About" }

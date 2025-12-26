@@ -102,7 +102,7 @@ pub async fn handler() -> Markup {
             body {
                 h1 { "Welcome to Rejoice!" }
                 p { "Click the button below - it's a SolidJS island!" }
-                (island!(Counter, { "initial": 0 }))
+                (island!(Counter, { initial: 0 }))
             }
         }
     }

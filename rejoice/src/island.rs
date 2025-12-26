@@ -18,8 +18,8 @@ macro_rules! island {
     ($name:ident) => {
         $crate::island_fn(stringify!($name), $crate::json!({}))
     };
-    ($name:ident, { $($json:tt)* }) => {
-        $crate::island_fn(stringify!($name), $crate::json!({ $($json)* }))
+    ($name:ident, { $($key:ident : $value:tt),* $(,)? }) => {
+        $crate::island_fn(stringify!($name), $crate::json!({ $(stringify!($key): $value),* }))
     };
 }
 

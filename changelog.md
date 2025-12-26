@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.2
+
+- Made prop syntax not require quotes around keys
+
 ## 0.4.1
 
 - Fixed lsp for TypeScript files in `client/` dir
