@@ -1,20 +1,19 @@
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
+import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
-  plugins: [solid()],
+  plugins: [solid(), tailwindcss()],
   build: {
     outDir: "dist",
-    lib: {
-      entry: "client/islands.tsx",
-      name: "islands",
-      fileName: () => "islands.js",
-      formats: ["es"],
-    },
     rollupOptions: {
+      input: {
+        islands: "client/islands.tsx",
+        styles: "client/styles.css",
+      },
       output: {
-        // Keep it as a single file
-        inlineDynamicImports: true,
+        entryFileNames: "[name].js",
+        assetFileNames: "[name].[ext]",
       },
     },
   },

@@ -7,9 +7,9 @@ pub async fn handler() -> Markup {
             head {
                 title { "Home" }
             }
-            body {
-                h1 { "Welcome to Rejoice!" }
-                p { "A simple and delightful web framework for Rust." }
+            body class="min-h-screen flex flex-col justify-center items-center" {
+                h1 class="text-2xl font-bold" { "Welcome to Rejoice!" }
+                p class="my-2" { "A simple and delightful web framework for Rust." }
 
                 h2 { "Interactive Counter (SolidJS Island)" }
                 (island!(Counter, { initial: 5 }))

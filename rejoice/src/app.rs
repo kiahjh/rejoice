@@ -18,8 +18,9 @@ impl App {
     pub fn new(port: u16, router: Router) -> Self {
         let dev_mode = std::env::var("REJOICE_DEV").is_ok();
         let has_islands = Path::new("dist/islands.js").exists();
+        let has_styles = Path::new("dist/styles.css").exists();
 
-        // Serve static files from dist/ directory (built JS)
+        // Serve static files from dist/ directory (built JS/CSS)
         let static_dir = Path::new("dist");
         let mut router = if static_dir.exists() {
             router.nest_service("/static", ServeDir::new(static_dir))
@@ -36,8 +37,8 @@ impl App {
             ),
         );
 
-        // Add script injection middleware
-        router = router.layer(ScriptInjectionLayer { dev_mode, has_islands });
+        // Add script/style injection middleware
+        router = router.layer(ScriptInjectionLayer { dev_mode, has_islands, has_styles });
 
         Self { port, router }
     }
@@ -58,11 +59,13 @@ const LIVE_RELOAD_SCRIPT: &str = concat!(
 );
 
 const ISLAND_SCRIPT: &str = r#"<script type="module" src="/static/islands.js"></script>"#;
+const STYLES_LINK: &str = r#"<link rel="stylesheet" href="/static/styles.css">"#;
 
 #[derive(Clone)]
 pub struct ScriptInjectionLayer {
     dev_mode: bool,
     has_islands: bool,
+    has_styles: bool,
 }
 
 impl<S> Layer<S> for ScriptInjectionLayer {
@@ -73,6 +76,7 @@ impl<S> Layer<S> for ScriptInjectionLayer {
             inner,
             dev_mode: self.dev_mode,
             has_islands: self.has_islands,
+            has_styles: self.has_styles,
         }
     }
 }
@@ -82,6 +86,7 @@ pub struct ScriptInjectionMiddleware<S> {
     inner: S,
     dev_mode: bool,
     has_islands: bool,
+    has_styles: bool,
 }
 
 impl<S> Service<Request<Body>> for ScriptInjectionMiddleware<S>
@@ -103,6 +108,7 @@ where
         let mut inner = self.inner.clone();
         let dev_mode = self.dev_mode;
         let has_islands = self.has_islands;
+        let has_styles = self.has_styles;
         
         Box::pin(async move {
             let response = inner.call(req).await?;
@@ -119,7 +125,7 @@ where
                 return Ok(response);
             }
 
-            // Build the scripts to inject
+            // Build the scripts to inject before </body>
             let mut scripts = String::new();
             if has_islands {
                 scripts.push_str(ISLAND_SCRIPT);
@@ -128,23 +134,42 @@ where
                 scripts.push_str(LIVE_RELOAD_SCRIPT);
             }
 
-            if scripts.is_empty() {
+            // Build the styles to inject in <head>
+            let mut head_inject = String::new();
+            if has_styles {
+                head_inject.push_str(STYLES_LINK);
+            }
+
+            if scripts.is_empty() && head_inject.is_empty() {
                 return Ok(response);
             }
 
-            // Read the body and inject the scripts
+            // Read the body and inject
             let (parts, body) = response.into_parts();
             let bytes = axum::body::to_bytes(body, usize::MAX)
                 .await
                 .unwrap_or_default();
             let html = String::from_utf8_lossy(&bytes);
 
-            // Inject before </body> if present, otherwise append
-            let modified = if html.contains("</body>") {
-                html.replace("</body>", &format!("{}</body>", scripts))
+            // Inject styles in <head>, or prepend if no <head>
+            let mut modified = if !head_inject.is_empty() {
+                if html.contains("</head>") {
+                    html.replace("</head>", &format!("{}</head>", head_inject))
+                } else {
+                    format!("{}{}", head_inject, html)
+                }
             } else {
-                format!("{}{}", html, scripts)
+                html.to_string()
             };
+
+            // Inject scripts before </body>, or append if no </body>
+            if !scripts.is_empty() {
+                modified = if modified.contains("</body>") {
+                    modified.replace("</body>", &format!("{}</body>", scripts))
+                } else {
+                    format!("{}{}", modified, scripts)
+                };
+            }
 
             let new_body = Body::from(modified);
             Ok(Response::from_parts(parts, new_body))

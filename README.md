@@ -1,11 +1,12 @@
 # Rejoice
 
-A simple and delightful web framework for Rust with file-based routing, live reload, and SolidJS islands for interactivity.
+A simple and delightful web framework for Rust with file-based routing, live reload, Tailwind CSS, and SolidJS islands for interactivity.
 
 ## Features
 
 - **File-based routing** - Just create `.rs` files in `src/routes/` and they become pages
 - **Live reload** - Changes automatically refresh the browser
+- **Tailwind CSS v4** - Utility-first CSS that scans your Rust and TSX files
 - **SolidJS islands** - Add interactive components without a full SPA
 - **Type-safe HTML** - Use Maud for compile-time HTML templating
 - **Zero config** - Just run `rejoice dev` and start building
@@ -83,3 +84,26 @@ export default function Counter(props: { initial: number }) {
 ```
 
 That's it! The island is automatically registered and hydrated on the client.
+
+## Tailwind CSS
+
+Tailwind CSS v4 is included out of the box. Just use Tailwind classes in your Rust templates or TSX components:
+
+```rust
+use rejoice::{html, Markup, DOCTYPE};
+
+pub async fn handler() -> Markup {
+    html! {
+        (DOCTYPE)
+        html {
+            head { title { "My Page" } }
+            body class="min-h-screen bg-gray-100" {
+                h1 class="text-4xl font-bold text-blue-600" { "Hello!" }
+                p class="mt-4 text-gray-700" { "Styled with Tailwind." }
+            }
+        }
+    }
+}
+```
+
+Tailwind automatically scans your `src/**/*.rs` and `client/**/*.tsx` files for classes.

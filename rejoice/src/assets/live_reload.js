@@ -13,6 +13,11 @@
   }
 
   ws.onmessage = async function (event) {
+    if (event.data === "full") {
+      // Full reload needed (client JS changed)
+      location.reload();
+      return;
+    }
     if (event.data === "reload") {
       try {
         const response = await fetchWithRetry(location.href);
@@ -27,6 +32,24 @@
         if (newDoc.title !== document.title) {
           document.title = newDoc.title;
         }
+
+        // Refresh stylesheets with cache-busting
+        const cacheBuster = Date.now();
+        document.querySelectorAll('link[rel="stylesheet"]').forEach((link) => {
+          const href = link.getAttribute("href");
+          if (href) {
+            const url = new URL(href, location.origin);
+            url.searchParams.set("_t", cacheBuster);
+            link.setAttribute("href", url.toString());
+          }
+        });
+
+        // Re-hydrate islands after body swap (defer to next frame for DOM to settle)
+        requestAnimationFrame(() => {
+          if (typeof window.__hydrateIslands === "function") {
+            window.__hydrateIslands();
+          }
+        });
       } catch (e) {
         // Fallback to full reload on error
         location.reload();

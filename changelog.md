@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0
+
+- Tailwind CSS support
+- Improved live reloading
+
 ## 0.4.2
 
 - Made prop syntax not require quotes around keys
