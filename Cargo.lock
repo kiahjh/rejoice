@@ -347,6 +347,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "example_app"
+version = "0.1.0"
+dependencies = [
+ "rejoice",
+ "tokio",
+]
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
