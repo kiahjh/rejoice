@@ -347,14 +347,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "example_app"
-version = "0.1.0"
-dependencies = [
- "kiah_stack",
- "tokio",
-]
-
-[[package]]
 name = "find-msvc-tools"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -779,18 +771,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "kiah_stack"
-version = "0.1.0"
-dependencies = [
- "axum",
- "dotenvy_macro",
- "sqlx",
- "tokio",
- "tower",
- "tower-http",
-]
-
-[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1110,6 +1090,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec96166dafa0886eb81fe1c0a388bece180fbef2135f97c1e2cf8302e74b43b5"
 dependencies = [
  "bitflags",
+]
+
+[[package]]
+name = "rejoice"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "dotenvy_macro",
+ "sqlx",
+ "tokio",
+ "tower",
+ "tower-http",
 ]
 
 [[package]]
