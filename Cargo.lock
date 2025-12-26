@@ -363,7 +363,7 @@ dependencies = [
 
 [[package]]
 name = "example_app"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "axum",
  "maud",
@@ -1330,7 +1330,7 @@ dependencies = [
 
 [[package]]
 name = "rejoice"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "axum",
  "dotenvy_macro",

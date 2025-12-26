@@ -1,4 +1,4 @@
-use rejoice::{html, Markup};
+use rejoice::{Markup, html};
 
 pub async fn handler() -> Markup {
     html! {

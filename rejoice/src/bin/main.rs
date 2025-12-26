@@ -177,6 +177,22 @@ export default function Counter(props: CounterProps) {
     std::fs::write(project_dir.join("client/Counter.tsx"), counter_tsx)
         .expect("Failed to write Counter.tsx");
 
+    // Write tsconfig.json
+    let tsconfig = r#"{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "strict": true,
+    "jsx": "preserve",
+    "jsxImportSource": "solid-js"
+  },
+  "include": ["client/**/*"]
+}
+"#;
+    std::fs::write(project_dir.join("tsconfig.json"), tsconfig)
+        .expect("Failed to write tsconfig.json");
+
     // Write .gitignore
     let gitignore = format!(
         r#"/target

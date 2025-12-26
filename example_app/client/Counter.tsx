@@ -8,8 +8,6 @@ export default function Counter(props: CounterProps) {
   const [count, setCount] = createSignal(props.initial);
 
   return (
-    <button onClick={() => setCount((c) => c + 1)}>
-      Count: {count()}
-    </button>
+    <button onClick={() => setCount((c) => c + 1)}>Count: {count()}</button>
   );
 }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1
+
+- Fixed lsp for TypeScript files in `client/` dir
+
 ## 0.4.0
 
 - Island architecture using SolidJS
