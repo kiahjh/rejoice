@@ -4,7 +4,7 @@ A simple stack for building server-rendered web apps in Rust.
 
 ## Uses
 
-- Axum (web framework)
-- Sqlite (database)
-- SQLx (ORM)
-- SolidJS (client-side interactivity)
+- [Axum](https://github.com/tokio-rs/axum) (web framework)
+- [SQLite](https://www.sqlite.org) (database)
+- [SQLx](https://github.com/launchbadge/sqlx) (ORM)
+- [SolidJS](https://www.solidjs.com) (client-side interactivity)
