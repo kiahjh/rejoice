@@ -1,5 +1,5 @@
 use axum::response::Html;
 
 pub async fn handler() -> Html<&'static str> {
-    Html("<h1>home</h1>")
+    Html("<h1>Home</h1>")
 }

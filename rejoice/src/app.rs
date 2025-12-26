@@ -10,7 +10,6 @@ use tower_http::cors::{Any, CorsLayer};
 pub struct App {
     port: u16,
     router: Router,
-    dev_mode: bool,
 }
 
 impl App {
@@ -31,18 +30,10 @@ impl App {
             router = router.layer(LiveReloadLayer);
         }
 
-        Self {
-            port,
-            router,
-            dev_mode,
-        }
+        Self { port, router }
     }
 
     pub async fn run(self) {
-        if self.dev_mode {
-            println!("Running in dev mode with live reload");
-        }
-
         let listener = tokio::net::TcpListener::bind(&format!("127.0.0.1:{}", self.port))
             .await
             .unwrap();

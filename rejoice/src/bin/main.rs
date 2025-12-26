@@ -129,8 +129,6 @@ fn dev_command() {
 }
 
 async fn async_dev_command() {
-    println!("Starting development server...");
-
     // Channel for broadcasting reload signals to WebSocket clients
     let (reload_tx, _) = broadcast::channel::<()>(16);
     let reload_tx = Arc::new(reload_tx);
@@ -153,7 +151,6 @@ async fn async_dev_command() {
         watcher
             .watch(src_path, RecursiveMode::Recursive)
             .expect("Failed to watch src directory");
-        println!("Watching src/ for changes...");
     } else {
         eprintln!("No src/ directory found");
         std::process::exit(1);
@@ -168,13 +165,12 @@ async fn async_dev_command() {
     }
 
     // Start the app
+    println!("Compiling...");
     let mut child = start_app();
 
     // Debounce: don't restart more than once per second
     let mut last_restart = Instant::now();
     let debounce_duration = Duration::from_secs(1);
-
-    println!("Live reload server running on ws://localhost:3001/__reload");
 
     loop {
         match rx.recv() {
@@ -183,8 +179,7 @@ async fn async_dev_command() {
                 match event.kind {
                     Create(_) | Modify(_) | Remove(_) => {
                         if last_restart.elapsed() > debounce_duration {
-                            println!("\nFile changed: {:?}", event.paths);
-                            println!("Restarting...\n");
+                            println!("Recompiling...");
 
                             // Kill the old process
                             let _ = child.kill();
@@ -248,7 +243,7 @@ async fn handle_reload_socket(socket: WebSocket, mut rx: broadcast::Receiver<()>
 
 fn start_app() -> Child {
     Command::new("cargo")
-        .args(["run"])
+        .args(["run", "--quiet"])
         .env("REJOICE_DEV", "1")
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
