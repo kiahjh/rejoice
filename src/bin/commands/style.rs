@@ -15,9 +15,9 @@ pub fn print_banner() {
 }
 
 pub fn print_version() {
-    print_banner();
+    println!("\n{}", "Rejoice".magenta().bold());
     println!(
-        "  {} {}",
+        "{} {}\n",
         "version".dimmed(),
         env!("CARGO_PKG_VERSION").bright_white()
     );

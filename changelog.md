@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.3
+
+- Tweaked --version output
+
 ## 0.6.2
 
 - Improved CLI output
