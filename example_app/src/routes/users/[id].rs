@@ -1,5 +1,4 @@
-use axum::extract::Path;
-use rejoice::{Markup, html};
+use rejoice::{Markup, Path, html};
 
 pub async fn page(Path(id): Path<String>) -> Markup {
     html! {

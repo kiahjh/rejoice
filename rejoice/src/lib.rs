@@ -5,8 +5,9 @@ pub mod env;
 mod island;
 
 pub use app::App;
+pub use axum::extract::Path;
 pub use island::island_fn;
-pub use maud::{html, Markup, PreEscaped, DOCTYPE};
+pub use maud::{DOCTYPE, Markup, PreEscaped, html};
 pub use serde_json::json;
 
 /// Children passed to a layout component.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.1
+
+- Re-export `Path` from `axum::extract`
+
 ## 0.6.0
 
 - Added support for nestable layouts
