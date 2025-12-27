@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.1
+
+- Now if you run `rejoice init` with no name for a project, it will use the current directory name and initialize a project at `.`
+
 ## 0.7.0
 
 - App state

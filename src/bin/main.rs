@@ -1,6 +1,6 @@
-mod commands;
-
 use clap::{CommandFactory, Parser, Subcommand};
+
+mod commands;
 
 #[derive(Parser)]
 #[command(name = "rejoice")]

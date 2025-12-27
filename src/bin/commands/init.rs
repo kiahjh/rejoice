@@ -1,16 +1,24 @@
+use super::style;
 use colored::Colorize;
 use std::path::Path;
 
-use super::style;
-
 pub fn init_command(name: Option<&String>, with_db: bool) {
-    let project_name = name.map(|s| s.as_str()).unwrap_or("my-app");
-    let project_dir = Path::new(project_name);
-
-    if project_dir.exists() {
-        style::print_error(&format!("Directory '{}' already exists", project_name));
-        std::process::exit(1);
-    }
+    let (project_dir, project_name, in_cwd) = if let Some(name) = name {
+        let dir = Path::new(name.as_str());
+        if dir.exists() {
+            style::print_error(&format!("Directory '{}' already exists", name));
+            std::process::exit(1);
+        }
+        (dir.to_path_buf(), name.clone(), false)
+    } else {
+        let cwd = std::env::current_dir().expect("Failed to get current directory");
+        let name = cwd
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("my-app")
+            .to_string();
+        (cwd, name, true)
+    };
 
     style::print_banner();
     println!(
@@ -24,67 +32,69 @@ pub fn init_command(name: Option<&String>, with_db: bool) {
 
     step += 1;
     style::print_step(step, total_steps, "Creating directories...");
-    create_directories(project_dir);
+    create_directories(&project_dir);
 
     step += 1;
     style::print_step(step, total_steps, "Writing Cargo.toml...");
-    write_cargo_toml(project_dir, project_name, with_db);
+    write_cargo_toml(&project_dir, &project_name, with_db);
 
     step += 1;
     style::print_step(step, total_steps, "Writing build.rs...");
-    write_build_rs(project_dir);
+    write_build_rs(&project_dir);
 
     step += 1;
     style::print_step(step, total_steps, "Writing src/main.rs...");
-    write_main_rs(project_dir, with_db);
+    write_main_rs(&project_dir, with_db);
 
     step += 1;
     style::print_step(step, total_steps, "Writing routes/layout.rs...");
-    write_layout(project_dir, with_db);
+    write_layout(&project_dir, with_db);
 
     step += 1;
     style::print_step(step, total_steps, "Writing routes/index.rs...");
-    write_index_route(project_dir, with_db);
+    write_index_route(&project_dir, with_db);
 
     step += 1;
     style::print_step(step, total_steps, "Writing package.json...");
-    write_package_json(project_dir);
+    write_package_json(&project_dir);
 
     step += 1;
     style::print_step(step, total_steps, "Writing vite.config.ts...");
-    write_vite_config(project_dir);
+    write_vite_config(&project_dir);
 
     step += 1;
     style::print_step(step, total_steps, "Writing client/styles.css...");
-    write_styles_css(project_dir);
+    write_styles_css(&project_dir);
 
     step += 1;
     style::print_step(step, total_steps, "Writing client/Counter.tsx...");
-    write_counter_component(project_dir);
+    write_counter_component(&project_dir);
 
     step += 1;
     style::print_step(step, total_steps, "Writing tsconfig.json...");
-    write_tsconfig(project_dir);
+    write_tsconfig(&project_dir);
 
     step += 1;
     style::print_step(step, total_steps, "Writing .gitignore...");
-    write_gitignore(project_dir, project_name, with_db);
+    write_gitignore(&project_dir, &project_name, with_db);
 
     if with_db {
         step += 1;
         style::print_step(step, total_steps, "Setting up database...");
-        create_database(project_dir, project_name);
+        create_database(&project_dir, &project_name);
     }
 
     println!();
 
     style::print_success("Project created successfully!");
     println!("\n  {}", "To get started:".dimmed());
-    println!(
-        "    {} {}",
-        "$".dimmed(),
-        format!("cd {}", project_name).white()
-    );
+    if !in_cwd {
+        println!(
+            "    {} {}",
+            "$".dimmed(),
+            format!("cd {}", project_name).white()
+        );
+    }
     println!("    {} {}\n", "$".dimmed(), "rejoice dev".white());
 }
 

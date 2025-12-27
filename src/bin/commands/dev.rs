@@ -1,3 +1,5 @@
+use super::islands::generate_islands_registry;
+use super::style;
 use axum::{
     Router,
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
@@ -11,9 +13,6 @@ use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
-
-use super::islands::generate_islands_registry;
-use super::style;
 
 pub fn dev_command() {
     let rt = tokio::runtime::Runtime::new().unwrap();
