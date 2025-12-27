@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.0
+
+- Added support for nestable layouts
+
 ## 0.5.0
 
 - Tailwind CSS support

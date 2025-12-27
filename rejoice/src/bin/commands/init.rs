@@ -15,6 +15,7 @@ pub fn init_command(name: Option<&String>) {
     write_cargo_toml(project_dir, project_name);
     write_build_rs(project_dir);
     write_main_rs(project_dir);
+    write_layout(project_dir);
     write_index_route(project_dir);
     write_package_json(project_dir);
     write_vite_config(project_dir);
@@ -81,9 +82,24 @@ async fn main() {
 }
 
 fn write_index_route(project_dir: &Path) {
-    let content = r#"use rejoice::{html, island, Markup, DOCTYPE};
+    let content = r#"use rejoice::{html, island, Markup};
 
-pub async fn handler() -> Markup {
+pub async fn page() -> Markup {
+    html! {
+        h1 { "Welcome to Rejoice!" }
+        p { "Click the button below - it's a SolidJS island!" }
+        (island!(Counter, { initial: 0 }))
+    }
+}
+"#;
+    std::fs::write(project_dir.join("src/routes/index.rs"), content)
+        .expect("Failed to write index.rs");
+}
+
+fn write_layout(project_dir: &Path) {
+    let content = r#"use rejoice::{html, Children, Markup, DOCTYPE};
+
+pub async fn layout(children: Children) -> Markup {
     html! {
         (DOCTYPE)
         html {
@@ -91,16 +107,14 @@ pub async fn handler() -> Markup {
                 title { "Welcome" }
             }
             body {
-                h1 { "Welcome to Rejoice!" }
-                p { "Click the button below - it's a SolidJS island!" }
-                (island!(Counter, { initial: 0 }))
+                (children)
             }
         }
     }
 }
 "#;
-    std::fs::write(project_dir.join("src/routes/index.rs"), content)
-        .expect("Failed to write index.rs");
+    std::fs::write(project_dir.join("src/routes/layout.rs"), content)
+        .expect("Failed to write layout.rs");
 }
 
 fn write_package_json(project_dir: &Path) {

@@ -1,7 +1,7 @@
 use axum::extract::Path;
 use rejoice::{Markup, html};
 
-pub async fn handler(Path(id): Path<String>) -> Markup {
+pub async fn page(Path(id): Path<String>) -> Markup {
     html! {
         h1 { "User " (id) }
         p { "This is the profile page for user " (id) "." }
