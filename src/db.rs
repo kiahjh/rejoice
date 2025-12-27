@@ -1,6 +1,7 @@
 use std::time::Duration;
 
-use sqlx::{Pool, Sqlite, sqlite::SqlitePoolOptions};
+// Re-export sqlx types and query functions/macros
+pub use sqlx::{Pool, Sqlite, query, query_as};
 
 pub struct PoolConfig {
     pub db_url: String,
@@ -11,7 +12,7 @@ pub struct PoolConfig {
 }
 
 pub async fn create_pool(config: PoolConfig) -> Pool<Sqlite> {
-    SqlitePoolOptions::new()
+    sqlx::sqlite::SqlitePoolOptions::new()
         .max_connections(config.max_connections)
         .acquire_timeout(config.acquire_timeout)
         .idle_timeout(config.idle_timeout)

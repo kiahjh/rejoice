@@ -10,6 +10,7 @@ A simple and delightful web framework for Rust with file-based routing, layouts,
 - **Tailwind CSS v4** - Utility-first CSS that scans your Rust and TSX files
 - **SolidJS islands** - Add interactive components without a full SPA
 - **Type-safe HTML** - Use Maud for compile-time HTML templating
+- **SQLite database** - Optional built-in support with sqlx
 - **Zero config** - Just run `rejoice dev` and start building
 
 ## Quick Start
@@ -26,25 +27,34 @@ cd my-app
 rejoice dev
 ```
 
+To create a project with SQLite database support:
+
+```bash
+rejoice init my-app --with-db
+```
+
 ## File-Based Routing
 
 ```
 src/routes/
-├── layout.rs       → Wraps all pages
-├── index.rs        → GET /
-├── about.rs        → GET /about
+├── layout.rs       -> Wraps all pages
+├── index.rs        -> GET /
+├── about.rs        -> GET /about
 └── users/
-    ├── layout.rs   → Wraps /users/* pages
-    ├── index.rs    → GET /users
-    └── [id].rs     → GET /users/:id
+    ├── layout.rs   -> Wraps /users/* pages
+    ├── index.rs    -> GET /users
+    └── [id].rs     -> GET /users/:id
 ```
 
 Each route file exports a `page` function:
 
 ```rust
-use rejoice::{html, Markup};
+use rejoice::{
+    State,
+    html::{Markup, html},
+};
 
-pub async fn page() -> Markup {
+pub async fn page(State(_): State<()>) -> Markup {
     html! {
         h1 { "Hello, world!" }
     }
@@ -56,9 +66,12 @@ pub async fn page() -> Markup {
 Layouts wrap pages and nested layouts. Create a `layout.rs` file to share UI:
 
 ```rust
-use rejoice::{html, Children, Markup, DOCTYPE};
+use rejoice::{
+    Children, State,
+    html::{DOCTYPE, Markup, html},
+};
 
-pub async fn layout(children: Children) -> Markup {
+pub async fn layout(State(_): State<()>, children: Children) -> Markup {
     html! {
         (DOCTYPE)
         html {
@@ -78,14 +91,95 @@ Layouts nest automatically. A page at `/users/123` will be wrapped by:
 2. `routes/users/layout.rs` (if exists)
 3. `routes/users/[id].rs`
 
+## Database Support
+
+Create a project with `--with-db` to get SQLite support out of the box:
+
+```bash
+rejoice init my-app --with-db
+```
+
+This sets up:
+- A SQLite database file
+- `.env` with `DATABASE_URL`
+- An `AppState` struct with a connection pool
+- Routes configured to receive state
+
+Access the database in your routes:
+
+```rust
+use crate::AppState;
+use rejoice::{
+    State,
+    db::query_as,
+    html::{Markup, html},
+};
+
+pub async fn page(State(state): State<AppState>) -> Markup {
+    let users: Vec<(String,)> = query_as("SELECT name FROM users")
+        .fetch_all(&state.db)
+        .await
+        .unwrap();
+
+    html! {
+        h1 { "Users" }
+        ul {
+            @for user in &users {
+                li { (user.0) }
+            }
+        }
+    }
+}
+```
+
+## Custom App State
+
+You can add your own state (database, config, services, etc.) to make it available in all routes:
+
+```rust
+use rejoice::{
+    App,
+    db::{Pool, PoolConfig, Sqlite, create_pool},
+};
+
+#[derive(Clone)]
+pub struct AppState {
+    pub db: Pool<Sqlite>,
+    pub config: AppConfig,
+}
+
+rejoice::routes!(AppState);
+
+#[tokio::main]
+async fn main() {
+    let pool = create_pool(PoolConfig { /* ... */ }).await;
+    let state = AppState { db: pool, config: load_config() };
+
+    let app = App::with_state(8080, create_router(), state);
+    app.run().await;
+}
+```
+
+Then access it in routes and layouts:
+
+```rust
+pub async fn page(State(state): State<AppState>) -> Markup {
+    // Use state.db, state.config, etc.
+}
+```
+
 ## SolidJS Islands
 
 Add interactive components to your pages:
 
 ```rust
-use rejoice::{html, island, Markup};
+use rejoice::{
+    State,
+    html::{Markup, html},
+    island,
+};
 
-pub async fn page() -> Markup {
+pub async fn page(State(_): State<()>) -> Markup {
     html! {
         h1 { "My Page" }
         (island!(Counter, { initial: 0 }))
@@ -115,9 +209,12 @@ That's it! The island is automatically registered and hydrated on the client.
 Tailwind CSS v4 is included out of the box. Just use Tailwind classes in your Rust templates or TSX components:
 
 ```rust
-use rejoice::{html, Markup};
+use rejoice::{
+    State,
+    html::{Markup, html},
+};
 
-pub async fn page() -> Markup {
+pub async fn page(State(_): State<()>) -> Markup {
     html! {
         h1 class="text-4xl font-bold text-blue-600" { "Hello!" }
         p class="mt-4 text-gray-700" { "Styled with Tailwind." }

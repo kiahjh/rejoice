@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.0
+
+- App state
+- SQLite support (optional, passed to routes through state)
+
 ## 0.6.3
 
 - Tweaked --version output

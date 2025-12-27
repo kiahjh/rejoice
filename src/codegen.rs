@@ -45,8 +45,8 @@ pub fn generate_routes() {
         }
     }
 
-    // Generate router
-    output.push_str("pub fn create_router() -> axum::Router {\n");
+    // Generate router using __RejoiceState type alias from routes!() macro
+    output.push_str("pub fn create_router() -> axum::Router<__RejoiceState> {\n");
     output.push_str("    axum::Router::new()\n");
 
     for route in &routes {
@@ -201,22 +201,23 @@ fn generate_wrapper_handler(
     let mut output = String::new();
 
     // Generate the wrapper function with appropriate signature
+    // Uses __RejoiceState type alias defined by routes!() macro
     if let Some(param) = &route.param {
         output.push_str(&format!(
-            "async fn wrapper_{}(axum::extract::Path({param}): axum::extract::Path<String>) -> maud::Markup {{\n",
+            "async fn wrapper_{}(axum::extract::State(state): axum::extract::State<__RejoiceState>, axum::extract::Path({param}): axum::extract::Path<String>) -> maud::Markup {{\n",
             route.mod_name
         ));
         output.push_str(&format!(
-            "    let content = routes::{}::page(axum::extract::Path({param})).await;\n",
+            "    let content = routes::{}::page(axum::extract::State(state.clone()), axum::extract::Path({param})).await;\n",
             route.mod_name
         ));
     } else {
         output.push_str(&format!(
-            "async fn wrapper_{}() -> maud::Markup {{\n",
+            "async fn wrapper_{}(axum::extract::State(state): axum::extract::State<__RejoiceState>) -> maud::Markup {{\n",
             route.mod_name
         ));
         output.push_str(&format!(
-            "    let content = routes::{}::page().await;\n",
+            "    let content = routes::{}::page(axum::extract::State(state.clone())).await;\n",
             route.mod_name
         ));
     }
@@ -224,7 +225,7 @@ fn generate_wrapper_handler(
     // Wrap with each layout from innermost to outermost
     for layout_mod in chain.iter().rev() {
         output.push_str(&format!(
-            "    let content = routes::{}::layout(content).await;\n",
+            "    let content = routes::{}::layout(axum::extract::State(state.clone()), content).await;\n",
             layout_mod
         ));
     }

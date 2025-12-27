@@ -12,11 +12,19 @@ use tower_http::services::ServeDir;
 
 pub struct App {
     port: u16,
-    router: Router,
+    router: Router<()>,
 }
 
 impl App {
-    pub fn new(port: u16, router: Router) -> Self {
+    pub fn new(port: u16, router: Router<()>) -> Self {
+        Self::with_state(port, router, ())
+    }
+
+    pub fn with_state<S: Clone + Send + Sync + 'static>(
+        port: u16,
+        router: Router<S>,
+        state: S,
+    ) -> Self {
         let dev_mode = std::env::var("REJOICE_DEV").is_ok();
         let has_islands = Path::new("dist/islands.js").exists();
         let has_styles = Path::new("dist/styles.css").exists();
@@ -44,6 +52,9 @@ impl App {
             has_islands,
             has_styles,
         });
+
+        // Attach state to router, converting Router<S> to Router<()>
+        let router = router.with_state(state);
 
         Self { port, router }
     }

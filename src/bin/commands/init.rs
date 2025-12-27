@@ -3,7 +3,7 @@ use std::path::Path;
 
 use super::style;
 
-pub fn init_command(name: Option<&String>) {
+pub fn init_command(name: Option<&String>, with_db: bool) {
     let project_name = name.map(|s| s.as_str()).unwrap_or("my-app");
     let project_dir = Path::new(project_name);
 
@@ -19,44 +19,62 @@ pub fn init_command(name: Option<&String>) {
         project_name.cyan().bold()
     );
 
-    let total_steps = 12;
+    let total_steps = if with_db { 13 } else { 12 };
+    let mut step = 0;
 
-    style::print_step(1, total_steps, "Creating directories...");
+    step += 1;
+    style::print_step(step, total_steps, "Creating directories...");
     create_directories(project_dir);
 
-    style::print_step(2, total_steps, "Writing Cargo.toml...");
-    write_cargo_toml(project_dir, project_name);
+    step += 1;
+    style::print_step(step, total_steps, "Writing Cargo.toml...");
+    write_cargo_toml(project_dir, project_name, with_db);
 
-    style::print_step(3, total_steps, "Writing build.rs...");
+    step += 1;
+    style::print_step(step, total_steps, "Writing build.rs...");
     write_build_rs(project_dir);
 
-    style::print_step(4, total_steps, "Writing src/main.rs...");
-    write_main_rs(project_dir);
+    step += 1;
+    style::print_step(step, total_steps, "Writing src/main.rs...");
+    write_main_rs(project_dir, with_db);
 
-    style::print_step(5, total_steps, "Writing routes/layout.rs...");
-    write_layout(project_dir);
+    step += 1;
+    style::print_step(step, total_steps, "Writing routes/layout.rs...");
+    write_layout(project_dir, with_db);
 
-    style::print_step(6, total_steps, "Writing routes/index.rs...");
-    write_index_route(project_dir);
+    step += 1;
+    style::print_step(step, total_steps, "Writing routes/index.rs...");
+    write_index_route(project_dir, with_db);
 
-    style::print_step(7, total_steps, "Writing package.json...");
+    step += 1;
+    style::print_step(step, total_steps, "Writing package.json...");
     write_package_json(project_dir);
 
-    style::print_step(8, total_steps, "Writing vite.config.ts...");
+    step += 1;
+    style::print_step(step, total_steps, "Writing vite.config.ts...");
     write_vite_config(project_dir);
 
-    style::print_step(9, total_steps, "Writing client/styles.css...");
+    step += 1;
+    style::print_step(step, total_steps, "Writing client/styles.css...");
     write_styles_css(project_dir);
 
-    style::print_step(10, total_steps, "Writing client/Counter.tsx...");
+    step += 1;
+    style::print_step(step, total_steps, "Writing client/Counter.tsx...");
     write_counter_component(project_dir);
 
-    style::print_step(11, total_steps, "Writing tsconfig.json...");
+    step += 1;
+    style::print_step(step, total_steps, "Writing tsconfig.json...");
     write_tsconfig(project_dir);
 
-    style::print_step(12, total_steps, "Setting up database...");
-    write_gitignore(project_dir, project_name);
-    create_database(project_dir, project_name);
+    step += 1;
+    style::print_step(step, total_steps, "Writing .gitignore...");
+    write_gitignore(project_dir, project_name, with_db);
+
+    if with_db {
+        step += 1;
+        style::print_step(step, total_steps, "Setting up database...");
+        create_database(project_dir, project_name);
+    }
 
     println!();
 
@@ -75,25 +93,41 @@ fn create_directories(project_dir: &Path) {
     std::fs::create_dir_all(project_dir.join("client")).expect("Failed to create client directory");
 }
 
-fn write_cargo_toml(project_dir: &Path, project_name: &str) {
+fn write_cargo_toml(project_dir: &Path, project_name: &str, with_db: bool) {
     let rejoice_version = env!("CARGO_PKG_VERSION");
-    let content = format!(
-        r#"[package]
+    let content = if with_db {
+        format!(
+            r#"[package]
 name = "{}"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-axum = "0.8"
-maud = {{ version = "0.27", features = ["axum"] }}
 rejoice = "{}"
 tokio = {{ version = "1.48.0", features = ["full"] }}
 
 [build-dependencies]
 rejoice = "{}"
 "#,
-        project_name, rejoice_version, rejoice_version
-    );
+            project_name, rejoice_version, rejoice_version
+        )
+    } else {
+        format!(
+            r#"[package]
+name = "{}"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rejoice = "{}"
+tokio = {{ version = "1.48.0", features = ["full"] }}
+
+[build-dependencies]
+rejoice = "{}"
+"#,
+            project_name, rejoice_version, rejoice_version
+        )
+    };
     std::fs::write(project_dir.join("Cargo.toml"), content).expect("Failed to write Cargo.toml");
 }
 
@@ -105,8 +139,41 @@ fn write_build_rs(project_dir: &Path) {
     std::fs::write(project_dir.join("build.rs"), content).expect("Failed to write build.rs");
 }
 
-fn write_main_rs(project_dir: &Path) {
-    let content = r#"use rejoice::App;
+fn write_main_rs(project_dir: &Path, with_db: bool) {
+    let content = if with_db {
+        r#"use std::time::Duration;
+
+use rejoice::{
+    App,
+    db::{Pool, PoolConfig, Sqlite, create_pool},
+};
+
+rejoice::routes!(AppState);
+
+#[derive(Clone)]
+pub struct AppState {
+    pub db: Pool<Sqlite>,
+}
+
+#[tokio::main]
+async fn main() {
+    let pool = create_pool(PoolConfig {
+        db_url: rejoice::env!("DATABASE_URL").to_string(),
+        max_connections: 5,
+        acquire_timeout: Duration::from_secs(3),
+        idle_timeout: Duration::from_secs(60),
+        max_lifetime: Duration::from_secs(1800),
+    })
+    .await;
+
+    let state = AppState { db: pool };
+
+    let app = App::with_state(8080, create_router(), state);
+    app.run().await;
+}
+"#
+    } else {
+        r#"use rejoice::App;
 
 rejoice::routes!();
 
@@ -115,29 +182,57 @@ async fn main() {
     let app = App::new(8080, create_router());
     app.run().await;
 }
-"#;
+"#
+    };
     std::fs::write(project_dir.join("src/main.rs"), content).expect("Failed to write main.rs");
 }
 
-fn write_index_route(project_dir: &Path) {
-    let content = r#"use rejoice::{html, island, Markup};
+fn write_index_route(project_dir: &Path, with_db: bool) {
+    let content = if with_db {
+        r#"use crate::AppState;
+use rejoice::{
+    State,
+    html::{Markup, html},
+    island,
+};
 
-pub async fn page() -> Markup {
+pub async fn page(State(_state): State<AppState>) -> Markup {
     html! {
         h1 { "Welcome to Rejoice!" }
         p { "Click the button below - it's a SolidJS island!" }
         (island!(Counter, { initial: 0 }))
     }
 }
-"#;
+"#
+    } else {
+        r#"use rejoice::{
+    State,
+    html::{Markup, html},
+    island,
+};
+
+pub async fn page(State(_): State<()>) -> Markup {
+    html! {
+        h1 { "Welcome to Rejoice!" }
+        p { "Click the button below - it's a SolidJS island!" }
+        (island!(Counter, { initial: 0 }))
+    }
+}
+"#
+    };
     std::fs::write(project_dir.join("src/routes/index.rs"), content)
         .expect("Failed to write index.rs");
 }
 
-fn write_layout(project_dir: &Path) {
-    let content = r#"use rejoice::{html, Children, Markup, DOCTYPE};
+fn write_layout(project_dir: &Path, with_db: bool) {
+    let content = if with_db {
+        r#"use crate::AppState;
+use rejoice::{
+    Children, State,
+    html::{DOCTYPE, Markup, html},
+};
 
-pub async fn layout(children: Children) -> Markup {
+pub async fn layout(State(_state): State<AppState>, children: Children) -> Markup {
     html! {
         (DOCTYPE)
         html {
@@ -150,7 +245,28 @@ pub async fn layout(children: Children) -> Markup {
         }
     }
 }
-"#;
+"#
+    } else {
+        r#"use rejoice::{
+    Children, State,
+    html::{DOCTYPE, Markup, html},
+};
+
+pub async fn layout(State(_): State<()>, children: Children) -> Markup {
+    html! {
+        (DOCTYPE)
+        html {
+            head {
+                title { "Welcome" }
+            }
+            body {
+                (children)
+            }
+        }
+    }
+}
+"#
+    };
     std::fs::write(project_dir.join("src/routes/layout.rs"), content)
         .expect("Failed to write layout.rs");
 }
@@ -256,17 +372,26 @@ fn write_tsconfig(project_dir: &Path) {
         .expect("Failed to write tsconfig.json");
 }
 
-fn write_gitignore(project_dir: &Path, project_name: &str) {
-    let content = format!(
-        r#"/target
+fn write_gitignore(project_dir: &Path, project_name: &str, with_db: bool) {
+    let content = if with_db {
+        format!(
+            r#"/target
 /node_modules
 /dist
 /client/islands.tsx
 .env
 {}.db
 "#,
-        project_name
-    );
+            project_name
+        )
+    } else {
+        r#"/target
+/node_modules
+/dist
+/client/islands.tsx
+"#
+        .to_string()
+    };
     std::fs::write(project_dir.join(".gitignore"), content).expect("Failed to write .gitignore");
 }
 

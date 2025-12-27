@@ -1,23 +1,42 @@
 mod commands;
 
-use commands::style;
+use clap::{CommandFactory, Parser, Subcommand};
+
+#[derive(Parser)]
+#[command(name = "rejoice")]
+#[command(about = "A simple and delightful little web framework for Rust")]
+#[command(version)]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Initialize a new Rejoice project
+    Init {
+        /// Project name
+        name: Option<String>,
+        /// Set up SQLite database with sqlx
+        #[arg(long)]
+        with_db: bool,
+    },
+    /// Start the development server
+    Dev,
+}
 
 fn main() {
-    let args: Vec<String> = std::env::args().collect();
+    let cli = Cli::parse();
 
-    match args.get(1).map(|s| s.as_str()) {
-        Some("--version" | "-v") => style::print_version(),
-        Some("--help" | "-h") => style::print_usage(),
-        Some("init") => commands::init_command(args.get(2)),
-        Some("dev") => commands::dev_command(),
-        Some(cmd) => {
-            style::print_error(&format!("Unknown command: {}", cmd));
-            println!();
-            style::print_usage();
-            std::process::exit(1);
+    match cli.command {
+        Some(Commands::Init { name, with_db }) => {
+            commands::init_command(name.as_ref(), with_db);
+        }
+        Some(Commands::Dev) => {
+            commands::dev_command();
         }
         None => {
-            style::print_usage();
+            Cli::command().print_help().unwrap();
         }
     }
 }

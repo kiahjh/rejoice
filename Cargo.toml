@@ -1,6 +1,6 @@
 [package]
 name = "rejoice"
-version = "0.6.3"
+version = "0.7.0"
 edition = "2024"
 description = "A simple and delightful little web framework for Rust"
 license = "MIT"
@@ -10,6 +10,7 @@ categories = ["web-programming::http-server"]
 
 [dependencies]
 axum = { version = "0.8.4", features = ["macros", "ws"] }
+clap = { version = "4", features = ["derive"] }
 colored = "2"
 dotenvy_macro = "0.15.7"
 futures = "0.3"
