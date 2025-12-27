@@ -101,6 +101,7 @@ pub fn init_command(name: Option<&String>, with_db: bool) {
 fn create_directories(project_dir: &Path) {
     std::fs::create_dir_all(project_dir.join("src/routes")).expect("Failed to create directories");
     std::fs::create_dir_all(project_dir.join("client")).expect("Failed to create client directory");
+    std::fs::create_dir_all(project_dir.join("public")).expect("Failed to create public directory");
 }
 
 fn write_cargo_toml(project_dir: &Path, project_name: &str) {

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.0
+
+- `public/` directory for static assets served at root URL path
+
 ## 0.7.2
 
 - Fixed import issues causing build errors

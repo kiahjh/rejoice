@@ -1,6 +1,6 @@
 [package]
 name = "rejoice"
-version = "0.7.2"
+version = "0.8.0"
 edition = "2024"
 description = "A simple and delightful little web framework for Rust"
 license = "MIT"

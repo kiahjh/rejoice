@@ -27,6 +27,26 @@
 
         // Swap body content
         document.body.innerHTML = newDoc.body.innerHTML;
+        
+        // Sync body attributes (for classes on <body> in layouts)
+        Array.from(newDoc.body.attributes).forEach((attr) => {
+          document.body.setAttribute(attr.name, attr.value);
+        });
+        Array.from(document.body.attributes).forEach((attr) => {
+          if (!newDoc.body.hasAttribute(attr.name)) {
+            document.body.removeAttribute(attr.name);
+          }
+        });
+
+        // Sync html element attributes (for classes on <html> in layouts)
+        Array.from(newDoc.documentElement.attributes).forEach((attr) => {
+          document.documentElement.setAttribute(attr.name, attr.value);
+        });
+        Array.from(document.documentElement.attributes).forEach((attr) => {
+          if (!newDoc.documentElement.hasAttribute(attr.name)) {
+            document.documentElement.removeAttribute(attr.name);
+          }
+        });
 
         // Update title if changed
         if (newDoc.title !== document.title) {

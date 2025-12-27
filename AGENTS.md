@@ -185,6 +185,17 @@ This runs automatically during `rejoice dev` on startup and when client files ch
 - Injects `<script>` before `</body>` for islands and live reload
 - Injects `<link>` in `</head>` for styles
 
+## Static Assets (public/)
+
+The `public/` directory serves static files at the root URL path:
+- `public/logo.png` → `/logo.png`
+- `public/images/hero.jpg` → `/images/hero.jpg`
+- `public/favicon.ico` → `/favicon.ico`
+
+Implemented in `app.rs` using `fallback_service(ServeDir::new("public"))`, so defined routes take precedence over static files.
+
+The `public/` directory is watched during `rejoice dev` and triggers a reload when files change.
+
 ## Tailwind CSS
 
 Configured in the generated `vite.config.ts` with `@tailwindcss/vite` plugin.

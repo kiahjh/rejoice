@@ -37,6 +37,12 @@ impl App {
             router
         };
 
+        // Serve public/ directory at root (for images, fonts, etc.)
+        let public_dir = Path::new("public");
+        if public_dir.exists() {
+            router = router.fallback_service(ServeDir::new(public_dir));
+        }
+
         router = router.layer(
             ServiceBuilder::new().layer(
                 CorsLayer::new()

@@ -116,6 +116,14 @@ fn setup_file_watcher(
             .expect("Failed to watch client directory");
     }
 
+    // Watch public directory for static assets
+    let public_dir = Path::new("public");
+    if public_dir.exists() {
+        watcher
+            .watch(public_dir, RecursiveMode::Recursive)
+            .expect("Failed to watch public directory");
+    }
+
     (watcher, rx)
 }
 
@@ -174,11 +182,32 @@ fn handle_file_change(
         path_str.contains("/client/") || path_str.contains("\\client\\")
     });
 
-    if is_client_only_change && has_islands {
+    let is_public_only_change = event.paths.iter().all(|p| {
+        let path_str = p.to_string_lossy();
+        path_str.contains("/public/") || path_str.contains("\\public\\")
+    });
+
+    if is_public_only_change {
+        // Static assets changed, just trigger a reload (no rebuild needed)
+        handle_public_change(reload_tx, last_restart);
+    } else if is_client_only_change && has_islands {
         handle_client_change(reload_tx, last_restart);
     } else {
         handle_rust_change(child, has_islands, reload_tx, last_restart);
     }
+}
+
+fn handle_public_change(
+    reload_tx: &Arc<broadcast::Sender<&'static str>>,
+    last_restart: &mut Instant,
+) {
+    println!(
+        "{} {}",
+        "↻".cyan().bold(),
+        "Static assets changed...".cyan()
+    );
+    *last_restart = Instant::now();
+    let _ = reload_tx.send("reload");
 }
 
 fn handle_client_change(
