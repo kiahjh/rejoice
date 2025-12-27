@@ -3,6 +3,7 @@ use axum::{
     body::Body,
     http::{Request, Response, header},
 };
+use colored::Colorize;
 use std::path::Path;
 use std::task::{Context, Poll};
 use tower::{Layer, Service, ServiceBuilder};
@@ -38,7 +39,11 @@ impl App {
         );
 
         // Add script/style injection middleware
-        router = router.layer(ScriptInjectionLayer { dev_mode, has_islands, has_styles });
+        router = router.layer(ScriptInjectionLayer {
+            dev_mode,
+            has_islands,
+            has_styles,
+        });
 
         Self { port, router }
     }
@@ -47,7 +52,19 @@ impl App {
         let listener = tokio::net::TcpListener::bind(&format!("127.0.0.1:{}", self.port))
             .await
             .unwrap();
-        println!("Listening on port {}", self.port);
+
+        let dev_mode = std::env::var("REJOICE_DEV").is_ok();
+        if dev_mode {
+            println!(
+                "{} {} {}",
+                "✓".green().bold(),
+                "Server running at".white(),
+                format!("http://localhost:{}", self.port).cyan().underline()
+            );
+        } else {
+            println!("Listening on http://localhost:{}", self.port);
+        }
+
         axum::serve(listener, self.router).await.unwrap();
     }
 }
@@ -109,7 +126,7 @@ where
         let dev_mode = self.dev_mode;
         let has_islands = self.has_islands;
         let has_styles = self.has_styles;
-        
+
         Box::pin(async move {
             let response = inner.call(req).await?;
 

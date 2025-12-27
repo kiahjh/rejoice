@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.2
+
+- Improved CLI output
+
 ## 0.6.1
 
 - Re-export `Path` from `axum::extract`

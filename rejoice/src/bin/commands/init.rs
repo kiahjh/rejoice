@@ -1,35 +1,73 @@
+use colored::Colorize;
 use std::path::Path;
+
+use super::style;
 
 pub fn init_command(name: Option<&String>) {
     let project_name = name.map(|s| s.as_str()).unwrap_or("my-app");
     let project_dir = Path::new(project_name);
 
     if project_dir.exists() {
-        eprintln!("Error: Directory '{}' already exists", project_name);
+        style::print_error(&format!("Directory '{}' already exists", project_name));
         std::process::exit(1);
     }
 
-    println!("Creating new rejoice project: {}", project_name);
+    style::print_banner();
+    println!(
+        "\n  {} {}\n",
+        "Creating project".white(),
+        project_name.cyan().bold()
+    );
 
+    let total_steps = 12;
+
+    style::print_step(1, total_steps, "Creating directories...");
     create_directories(project_dir);
+
+    style::print_step(2, total_steps, "Writing Cargo.toml...");
     write_cargo_toml(project_dir, project_name);
+
+    style::print_step(3, total_steps, "Writing build.rs...");
     write_build_rs(project_dir);
+
+    style::print_step(4, total_steps, "Writing src/main.rs...");
     write_main_rs(project_dir);
+
+    style::print_step(5, total_steps, "Writing routes/layout.rs...");
     write_layout(project_dir);
+
+    style::print_step(6, total_steps, "Writing routes/index.rs...");
     write_index_route(project_dir);
+
+    style::print_step(7, total_steps, "Writing package.json...");
     write_package_json(project_dir);
+
+    style::print_step(8, total_steps, "Writing vite.config.ts...");
     write_vite_config(project_dir);
+
+    style::print_step(9, total_steps, "Writing client/styles.css...");
     write_styles_css(project_dir);
+
+    style::print_step(10, total_steps, "Writing client/Counter.tsx...");
     write_counter_component(project_dir);
+
+    style::print_step(11, total_steps, "Writing tsconfig.json...");
     write_tsconfig(project_dir);
+
+    style::print_step(12, total_steps, "Setting up database...");
     write_gitignore(project_dir, project_name);
     create_database(project_dir, project_name);
 
-    println!("Project created successfully!");
     println!();
-    println!("To get started:");
-    println!("  cd {}", project_name);
-    println!("  rejoice dev");
+
+    style::print_success("Project created successfully!");
+    println!("\n  {}", "To get started:".dimmed());
+    println!(
+        "    {} {}",
+        "$".dimmed(),
+        format!("cd {}", project_name).white()
+    );
+    println!("    {} {}\n", "$".dimmed(), "rejoice dev".white());
 }
 
 fn create_directories(project_dir: &Path) {
@@ -137,7 +175,8 @@ fn write_package_json(project_dir: &Path) {
   }
 }
 "#;
-    std::fs::write(project_dir.join("package.json"), content).expect("Failed to write package.json");
+    std::fs::write(project_dir.join("package.json"), content)
+        .expect("Failed to write package.json");
 }
 
 fn write_vite_config(project_dir: &Path) {

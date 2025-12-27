@@ -3,6 +3,7 @@ use axum::{
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
     routing::get,
 };
+use colored::Colorize;
 use futures::{SinkExt, StreamExt};
 use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 use std::path::Path;
@@ -12,6 +13,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
 
 use super::islands::generate_islands_registry;
+use super::style;
 
 pub fn dev_command() {
     let rt = tokio::runtime::Runtime::new().unwrap();
@@ -19,6 +21,9 @@ pub fn dev_command() {
 }
 
 async fn run_dev_server() {
+    style::print_banner();
+    println!("\n  {}\n", "Starting development server...".dimmed());
+
     let client_dir = Path::new("client");
     let has_islands = client_dir.exists();
 
@@ -38,7 +43,7 @@ async fn run_dev_server() {
     let watcher = setup_file_watcher(has_islands, client_dir);
 
     // Start the app
-    println!("Compiling...");
+    style::print_compiling();
     let mut child = start_app();
 
     // Run the watch loop
@@ -49,7 +54,11 @@ fn setup_client_build() {
     generate_islands_registry();
 
     if !Path::new("node_modules").exists() {
-        println!("Installing npm dependencies...");
+        println!(
+            "{} {}",
+            "→".blue().bold(),
+            "Installing npm dependencies...".white()
+        );
         let status = Command::new("npm")
             .args(["install"])
             .stdout(Stdio::inherit())
@@ -57,12 +66,17 @@ fn setup_client_build() {
             .status();
 
         if status.is_err() || !status.unwrap().success() {
-            eprintln!("Failed to run npm install");
+            style::print_error("Failed to run npm install");
             std::process::exit(1);
         }
+        println!();
     }
 
-    println!("Building client assets...");
+    println!(
+        "{} {}",
+        "→".blue().bold(),
+        "Building client assets...".white()
+    );
     run_vite_build();
 }
 
@@ -84,7 +98,7 @@ fn setup_file_watcher(
             .watch(src_path, RecursiveMode::Recursive)
             .expect("Failed to watch src directory");
     } else {
-        eprintln!("No src/ directory found");
+        style::print_error("No src/ directory found");
         std::process::exit(1);
     }
 
@@ -139,10 +153,10 @@ fn run_watch_loop(
                 }
             }
             Ok(Err(e)) => {
-                eprintln!("Watch error: {:?}", e);
+                eprintln!("{} Watch error: {:?}", "!".red().bold(), e);
             }
             Err(e) => {
-                eprintln!("Channel error: {:?}", e);
+                eprintln!("{} Channel error: {:?}", "!".red().bold(), e);
                 break;
             }
         }
@@ -172,7 +186,7 @@ fn handle_client_change(
     reload_tx: &Arc<broadcast::Sender<&'static str>>,
     last_restart: &mut Instant,
 ) {
-    println!("Rebuilding client assets...");
+    println!("{} {}", "↻".cyan().bold(), "Rebuilding client...".cyan());
     generate_islands_registry();
     run_vite_build();
     *last_restart = Instant::now();
@@ -186,11 +200,11 @@ fn handle_rust_change(
     last_restart: &mut Instant,
 ) {
     if has_islands {
-        println!("Rebuilding assets...");
+        println!("{} {}", "↻".blue().bold(), "Rebuilding assets...".blue());
         run_vite_build();
     }
 
-    println!("Recompiling...");
+    style::print_compiling();
 
     let _ = child.kill();
     let _ = child.wait();

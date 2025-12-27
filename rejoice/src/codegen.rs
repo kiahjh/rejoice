@@ -121,12 +121,17 @@ fn collect_layouts_and_routes(
                 continue;
             }
 
-            let (file_mod_name, route_segment, param) = if stem.starts_with('[') && stem.ends_with(']') {
-                let param_name = &stem[1..stem.len() - 1];
-                (format!("param_{}", param_name), format!("{{{}}}", param_name), Some(param_name.to_string()))
-            } else {
-                (stem.to_string(), stem.to_string(), None)
-            };
+            let (file_mod_name, route_segment, param) =
+                if stem.starts_with('[') && stem.ends_with(']') {
+                    let param_name = &stem[1..stem.len() - 1];
+                    (
+                        format!("param_{}", param_name),
+                        format!("{{{}}}", param_name),
+                        Some(param_name.to_string()),
+                    )
+                } else {
+                    (stem.to_string(), stem.to_string(), None)
+                };
 
             let url_path = if stem == "index" {
                 if url_prefix.is_empty() {
@@ -184,14 +189,13 @@ fn get_layout_chain(route: &RouteInfo, layouts: &HashMap<String, String>) -> Opt
         }
     }
 
-    if chain.is_empty() {
-        None
-    } else {
-        Some(chain)
-    }
+    if chain.is_empty() { None } else { Some(chain) }
 }
 
-fn generate_wrapper_handler(route: &RouteInfo, layouts: &HashMap<String, String>) -> Option<String> {
+fn generate_wrapper_handler(
+    route: &RouteInfo,
+    layouts: &HashMap<String, String>,
+) -> Option<String> {
     let chain = get_layout_chain(route, layouts)?;
 
     let mut output = String::new();
@@ -226,7 +230,7 @@ fn generate_wrapper_handler(route: &RouteInfo, layouts: &HashMap<String, String>
     }
 
     output.push_str("    content\n");
-    output.push_str("}");
+    output.push('}');
 
     Some(output)
 }
