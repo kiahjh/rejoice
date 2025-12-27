@@ -46,8 +46,8 @@ pub fn generate_routes() {
     }
 
     // Generate router using __RejoiceState type alias from routes!() macro
-    output.push_str("pub fn create_router() -> axum::Router<__RejoiceState> {\n");
-    output.push_str("    axum::Router::new()\n");
+    output.push_str("pub fn create_router() -> rejoice::Router<__RejoiceState> {\n");
+    output.push_str("    rejoice::Router::new()\n");
 
     for route in &routes {
         let handler = if has_layouts(route, &layouts) {
@@ -56,7 +56,7 @@ pub fn generate_routes() {
             format!("routes::{}::page", route.mod_name)
         };
         output.push_str(&format!(
-            "        .route({:?}, axum::routing::get({}))\n",
+            "        .route({:?}, rejoice::routing::get({}))\n",
             route.url_path, handler
         ));
     }
@@ -204,20 +204,20 @@ fn generate_wrapper_handler(
     // Uses __RejoiceState type alias defined by routes!() macro
     if let Some(param) = &route.param {
         output.push_str(&format!(
-            "async fn wrapper_{}(axum::extract::State(state): axum::extract::State<__RejoiceState>, axum::extract::Path({param}): axum::extract::Path<String>) -> maud::Markup {{\n",
+            "async fn wrapper_{}(rejoice::State(state): rejoice::State<__RejoiceState>, rejoice::Path({param}): rejoice::Path<String>) -> rejoice::html::Markup {{\n",
             route.mod_name
         ));
         output.push_str(&format!(
-            "    let content = routes::{}::page(axum::extract::State(state.clone()), axum::extract::Path({param})).await;\n",
+            "    let content = routes::{}::page(rejoice::State(state.clone()), rejoice::Path({param})).await;\n",
             route.mod_name
         ));
     } else {
         output.push_str(&format!(
-            "async fn wrapper_{}(axum::extract::State(state): axum::extract::State<__RejoiceState>) -> maud::Markup {{\n",
+            "async fn wrapper_{}(rejoice::State(state): rejoice::State<__RejoiceState>) -> rejoice::html::Markup {{\n",
             route.mod_name
         ));
         output.push_str(&format!(
-            "    let content = routes::{}::page(axum::extract::State(state.clone())).await;\n",
+            "    let content = routes::{}::page(rejoice::State(state.clone())).await;\n",
             route.mod_name
         ));
     }
@@ -225,7 +225,7 @@ fn generate_wrapper_handler(
     // Wrap with each layout from innermost to outermost
     for layout_mod in chain.iter().rev() {
         output.push_str(&format!(
-            "    let content = routes::{}::layout(axum::extract::State(state.clone()), content).await;\n",
+            "    let content = routes::{}::layout(rejoice::State(state.clone()), content).await;\n",
             layout_mod
         ));
     }
