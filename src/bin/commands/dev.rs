@@ -1,4 +1,4 @@
-use super::islands::generate_islands_registry;
+use super::islands::{generate_islands_registry, generate_vite_config, has_island_components};
 use super::style;
 use axum::{
     Router,
@@ -24,9 +24,9 @@ async fn run_dev_server() {
     println!("\n  {}\n", "Starting development server...".dimmed());
 
     let client_dir = Path::new("client");
-    let has_islands = client_dir.exists();
+    let has_client = client_dir.exists();
 
-    if has_islands {
+    if has_client {
         setup_client_build();
     }
 
@@ -39,18 +39,22 @@ async fn run_dev_server() {
     });
 
     // Set up file watcher
-    let watcher = setup_file_watcher(has_islands, client_dir);
+    let watcher = setup_file_watcher(has_client, client_dir);
 
     // Start the app
     style::print_compiling();
     let mut child = start_app();
 
     // Run the watch loop
-    run_watch_loop(watcher, &mut child, has_islands, reload_tx);
+    run_watch_loop(watcher, &mut child, has_client, reload_tx);
 }
 
 fn setup_client_build() {
-    generate_islands_registry();
+    let has_islands = has_island_components();
+
+    if has_islands {
+        generate_islands_registry();
+    }
 
     if !Path::new("node_modules").exists() {
         println!(
@@ -70,6 +74,9 @@ fn setup_client_build() {
         }
         println!();
     }
+
+    // Generate appropriate vite config based on whether we have islands
+    generate_vite_config(has_islands);
 
     println!(
         "{} {}",
@@ -215,7 +222,11 @@ fn handle_client_change(
     last_restart: &mut Instant,
 ) {
     println!("{} {}", "↻".cyan().bold(), "Rebuilding client...".cyan());
-    generate_islands_registry();
+    let has_islands = has_island_components();
+    if has_islands {
+        generate_islands_registry();
+    }
+    generate_vite_config(has_islands);
     run_vite_build();
     *last_restart = Instant::now();
     let _ = reload_tx.send("full");

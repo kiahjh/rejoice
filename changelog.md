@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.1
+
+- No JS by default; if there's no islands in `client/`, no JS gets sent to the client
+
 ## 0.9.0
 
 - Added `rejoice build` command for smoother deployment

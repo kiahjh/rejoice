@@ -1,10 +1,34 @@
 use std::path::Path;
 
-/// Generates the islands.tsx registry file from all component files in client/
-pub fn generate_islands_registry() {
+/// Checks if there are any island components (tsx/jsx files) in client/
+pub fn has_island_components() -> bool {
     let client_dir = Path::new("client");
     let Ok(entries) = std::fs::read_dir(client_dir) else {
-        return;
+        return false;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if let Some(ext) = path.extension()
+            && (ext == "tsx" || ext == "jsx")
+            && let Some(stem) = path.file_stem()
+        {
+            let name = stem.to_string_lossy().to_string();
+            if name != "islands" && name != "styles" {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+/// Generates the islands.tsx registry file from all component files in client/
+/// Returns true if islands were found and the file was generated.
+pub fn generate_islands_registry() -> bool {
+    let client_dir = Path::new("client");
+    let Ok(entries) = std::fs::read_dir(client_dir) else {
+        return false;
     };
 
     let mut components: Vec<String> = Vec::new();
@@ -24,11 +48,12 @@ pub fn generate_islands_registry() {
     }
 
     if components.is_empty() {
-        return;
+        return false;
     }
 
     let output = generate_islands_code(&components);
     std::fs::write(client_dir.join("islands.tsx"), output).expect("Failed to write islands.tsx");
+    true
 }
 
 fn generate_islands_code(components: &[String]) -> String {
@@ -52,6 +77,55 @@ fn generate_islands_code(components: &[String]) -> String {
     output.push_str(HYDRATE_ISLANDS_CODE);
 
     output
+}
+
+/// Generates a vite.config.ts appropriate for the current project
+/// If has_islands is true, includes islands.tsx as an input
+pub fn generate_vite_config(has_islands: bool) {
+    let content = if has_islands {
+        r#"import { defineConfig } from "vite";
+import solid from "vite-plugin-solid";
+import tailwindcss from "@tailwindcss/vite";
+
+export default defineConfig({
+  plugins: [solid(), tailwindcss()],
+  build: {
+    outDir: "dist",
+    rollupOptions: {
+      input: {
+        islands: "client/islands.tsx",
+        styles: "client/styles.css",
+      },
+      output: {
+        entryFileNames: "[name].js",
+        assetFileNames: "[name].[ext]",
+      },
+    },
+  },
+});
+"#
+    } else {
+        r#"import { defineConfig } from "vite";
+import tailwindcss from "@tailwindcss/vite";
+
+export default defineConfig({
+  plugins: [tailwindcss()],
+  build: {
+    outDir: "dist",
+    rollupOptions: {
+      input: {
+        styles: "client/styles.css",
+      },
+      output: {
+        assetFileNames: "[name].[ext]",
+      },
+    },
+  },
+});
+"#
+    };
+
+    std::fs::write("vite.config.ts", content).expect("Failed to write vite.config.ts");
 }
 
 const HYDRATE_ISLANDS_CODE: &str = r#"function hydrateIslands() {

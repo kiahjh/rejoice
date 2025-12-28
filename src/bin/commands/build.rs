@@ -1,4 +1,4 @@
-use super::islands::generate_islands_registry;
+use super::islands::{generate_islands_registry, generate_vite_config, has_island_components};
 use super::style;
 use colored::Colorize;
 use std::path::Path;
@@ -15,9 +15,19 @@ pub fn build_command(release: bool) {
 
     let client_dir = Path::new("client");
     let has_client = client_dir.exists();
+    let has_islands = has_island_components();
 
-    // Determine total steps
-    let total_steps = if has_client { 4 } else { 1 };
+    // Determine total steps:
+    // - No client dir: just cargo build (1 step)
+    // - Client dir with islands: npm install, generate islands, build assets, cargo build (4 steps)
+    // - Client dir without islands: npm install, build assets, cargo build (3 steps)
+    let total_steps = if !has_client {
+        1
+    } else if has_islands {
+        4
+    } else {
+        3
+    };
     let mut step = 1;
 
     // Step 1: Install npm dependencies if needed
@@ -39,12 +49,17 @@ pub fn build_command(release: bool) {
         }
         step += 1;
 
-        // Step 2: Generate islands registry
-        style::print_step(step, total_steps, "Generating islands registry...");
-        generate_islands_registry();
-        step += 1;
+        // Step 2 (only if islands exist): Generate islands registry
+        if has_islands {
+            style::print_step(step, total_steps, "Generating islands registry...");
+            generate_islands_registry();
+            step += 1;
+        }
 
-        // Step 3: Build client assets with Vite
+        // Generate appropriate vite config based on whether we have islands
+        generate_vite_config(has_islands);
+
+        // Step 3 (or 2): Build client assets with Vite
         style::print_step(step, total_steps, "Building client assets...");
         let vite_status = Command::new("npm")
             .args(["run", "build"])
