@@ -53,6 +53,23 @@ Starts the dev server with:
 - Vite watch for client assets
 - WebSocket-based live reload
 
+### `rejoice build [--release]`
+
+Builds the project for deployment. Implementation in `src/bin/commands/build.rs`.
+
+**Steps performed:**
+1. Install npm dependencies (if `node_modules/` missing and `client/` exists)
+2. Generate islands registry (if `client/` exists)
+3. Build client assets with Vite (if `client/` exists)
+4. Build Rust binary with Cargo
+
+**Flags:**
+- `--release` - Build with optimizations, prints deployment instructions
+
+**Output locations:**
+- Binary: `target/debug/<name>` or `target/release/<name>`
+- Client assets: `dist/islands.js`, `dist/styles.css`
+
 ## Code Generation
 
 The `codegen.rs` module runs at **build time** via the user's `build.rs`:

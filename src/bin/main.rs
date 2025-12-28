@@ -23,6 +23,12 @@ enum Commands {
     },
     /// Start the development server
     Dev,
+    /// Build the project for deployment
+    Build {
+        /// Build in release mode with optimizations
+        #[arg(long)]
+        release: bool,
+    },
 }
 
 fn main() {
@@ -34,6 +40,9 @@ fn main() {
         }
         Some(Commands::Dev) => {
             commands::dev_command();
+        }
+        Some(Commands::Build { release }) => {
+            commands::build_command(release);
         }
         None => {
             Cli::command().print_help().unwrap();

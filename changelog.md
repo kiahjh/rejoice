@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.0
+
+- Added `rejoice build` command for smoother deployment
+
 ## 0.8.0
 
 - `public/` directory for static assets served at root URL path
