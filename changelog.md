@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.2
+
+- Made sqlx an optional dependency behind the "sqlite" feature flag
+
 ## 0.9.1
 
 - No JS by default; if there's no islands in `client/`, no JS gets sent to the client

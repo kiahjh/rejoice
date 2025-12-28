@@ -36,7 +36,7 @@ pub fn init_command(name: Option<&String>, with_db: bool) {
 
     step += 1;
     style::print_step(step, total_steps, "Writing Cargo.toml...");
-    write_cargo_toml(&project_dir, &project_name);
+    write_cargo_toml(&project_dir, &project_name, with_db);
 
     step += 1;
     style::print_step(step, total_steps, "Writing build.rs...");
@@ -104,8 +104,16 @@ fn create_directories(project_dir: &Path) {
     std::fs::create_dir_all(project_dir.join("public")).expect("Failed to create public directory");
 }
 
-fn write_cargo_toml(project_dir: &Path, project_name: &str) {
+fn write_cargo_toml(project_dir: &Path, project_name: &str, with_db: bool) {
     let rejoice_version = env!("CARGO_PKG_VERSION");
+    let rejoice_dep = if with_db {
+        format!(
+            r#"rejoice = {{ version = "{}", features = ["sqlite"] }}"#,
+            rejoice_version
+        )
+    } else {
+        format!(r#"rejoice = "{}""#, rejoice_version)
+    };
     let content = format!(
         r#"[package]
 name = "{}"
@@ -114,13 +122,13 @@ edition = "2024"
 
 [dependencies]
 maud = {{ version = "0.27", features = ["axum"] }}
-rejoice = "{}"
+{}
 tokio = {{ version = "1.48.0", features = ["full"] }}
 
 [build-dependencies]
 rejoice = "{}"
 "#,
-        project_name, rejoice_version, rejoice_version
+        project_name, rejoice_dep, rejoice_version
     );
     std::fs::write(project_dir.join("Cargo.toml"), content).expect("Failed to write Cargo.toml");
 }

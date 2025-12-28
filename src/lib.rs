@@ -1,5 +1,6 @@
 mod app;
 pub mod codegen;
+#[cfg(feature = "sqlite")]
 pub mod db;
 pub mod env;
 pub mod html;
@@ -23,8 +24,6 @@ macro_rules! env {
         $crate::dotenvy_macro::dotenv!($key)
     };
 }
-
-
 
 /// Children passed to a layout component.
 /// Use this in your layout function signature and render with `(children)` in Maud.

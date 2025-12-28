@@ -147,12 +147,21 @@ pub async fn layout(State(state): State<AppState>, children: Children) -> Markup
 
 ## Database Support
 
-Exports in `src/db.rs`:
+**Feature-gated:** The database module requires the `sqlite` feature flag.
+
+```toml
+# In user's Cargo.toml
+rejoice = { version = "...", features = ["sqlite"] }
+```
+
+Exports in `src/db.rs` (only available with `sqlite` feature):
 - `Pool`, `Sqlite` - sqlx types
 - `query`, `query_as` - sqlx query functions/macros
 - `PoolConfig`, `create_pool` - Pool creation helpers
 
 Users access via `rejoice::db::*`.
+
+When `rejoice init --with-db` is used, the generated `Cargo.toml` automatically includes the `sqlite` feature.
 
 ## Islands (SolidJS Components)
 
