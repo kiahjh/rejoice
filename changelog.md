@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.10.0
+
+- Added `Req` type for read-only access to incoming request data (headers, cookies, method, uri)
+- Added `Res` type for building responses with `set_*` mutators and finalizers (`html`, `json`, `redirect`, `raw`)
+- Routes can now return redirects, JSON, or raw responses in addition to HTML
+- Non-HTML responses bypass layout wrapping automatically
+- Simplified route signatures: state is now passed as a plain value instead of `State<T>` wrapper
+- Flattened exports: `html!`, `Markup`, `DOCTYPE`, `PreEscaped` are now available at root level
+- Added `prelude` module for convenient imports
+
 ## 0.9.2
 
 - Made sqlx an optional dependency behind the "sqlite" feature flag

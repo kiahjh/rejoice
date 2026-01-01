@@ -16,8 +16,8 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(port: u16, router: Router<()>) -> Self {
-        Self::with_state(port, router, ())
+    pub fn new(port: u16, router: Router<crate::NoState>) -> Self {
+        Self::with_state(port, router, crate::NoState)
     }
 
     pub fn with_state<S: Clone + Send + Sync + 'static>(

@@ -20,8 +20,9 @@ src/
 ├── codegen.rs               # Build-time route generation
 ├── db.rs                    # SQLite pool config and exports
 ├── env.rs                   # Re-exports dotenvy_macro::dotenv as env!
-├── html.rs                  # Re-exports maud (html!, Markup, etc.)
 ├── island.rs                # Island macro for SolidJS components
+├── request.rs               # Req type for incoming request data
+├── response.rs              # Res type for building responses
 └── lib.rs                   # Public API exports
 ```
 
@@ -35,14 +36,14 @@ Creates a new project. Implementation in `src/bin/commands/init.rs`.
 
 **Without `--with-db`:**
 - Basic project with `App::new()` and `routes!()`
-- Routes use `State<()>`
+- Routes receive `req: Req, res: Res`
 - No database files
 
 **With `--with-db`:**
 - Creates `.env` with `DATABASE_URL` and empty `.db` file
 - Generates `AppState` struct with db pool in `main.rs`
 - Uses `App::with_state()` and `routes!(AppState)`
-- Routes use `State<AppState>`
+- Routes receive `state: AppState, req: Req, res: Res`
 
 **IMPORTANT:** When changing the framework's public API, imports, or patterns, update the generated templates in `init.rs` to match.
 
@@ -96,10 +97,11 @@ Scans `src/routes/` recursively:
 ### Generated wrapper functions
 
 For routes with layouts, generates wrapper functions that:
-1. Accept `State<__RejoiceState>` (type alias set by `routes!()` macro)
-2. Call the page function with state
-3. Wrap result in each layout (innermost to outermost)
-4. Pass state to each layout
+1. Extract state via Axum's `State` extractor (internally)
+2. Extract `Req` and `Res` from the request
+3. Call the page function with `(state, req, res)` or `(req, res)`
+4. If the response is HTML, wrap with layouts (innermost to outermost)
+5. If the response is not HTML (redirect, JSON, etc.), return it directly without layout wrapping
 
 The `__RejoiceState` type alias is defined by the `routes!()` macro:
 - `routes!()` → `type __RejoiceState = ();`
@@ -112,6 +114,70 @@ pub fn create_router() -> axum::Router<__RejoiceState> {
     axum::Router::new()
         .route("/", axum::routing::get(wrapper_index))
         // ... more routes
+}
+```
+
+## Request and Response Types
+
+### `Req` - Incoming Request
+
+The `Req` type provides read-only access to request data:
+
+```rust
+pub struct Req {
+    pub headers: HeaderMap,   // HTTP headers
+    pub cookies: Cookies,     // Parsed cookies
+    pub method: Method,       // GET, POST, etc.
+    pub uri: Uri,             // Request URI
+}
+
+// Reading request data
+let auth = req.headers.get("Authorization");
+let session = req.cookies.get("session_id");
+```
+
+### `Res` - Response Builder
+
+The `Res` type uses interior mutability for building responses.
+
+**Mutators** (return `&Res` for chaining):
+- `set_cookie(name, value)` - Set a cookie
+- `set_cookie_with_options(...)` - Set cookie with path, max_age, etc.
+- `delete_cookie(name)` - Delete a cookie
+- `set_header(name, value)` - Set a response header
+- `set_status(StatusCode)` - Override status code
+
+**Finalizers** (consume `Res`, return `Res`):
+- `html(Markup)` - HTML response (200, text/html)
+- `json(&impl Serialize)` - JSON response (200, application/json)
+- `redirect(url)` - 302 redirect
+- `redirect_permanent(url)` - 301 redirect
+- `raw(impl Into<Vec<u8>>)` - Raw bytes
+
+**Example usage:**
+
+```rust
+pub async fn page(state: AppState, req: Req, res: Res) -> Res {
+    // Read cookies
+    let session = req.cookies.get("session");
+    
+    if session.is_none() {
+        // Redirect (bypasses layout wrapping)
+        return res.redirect("/login");
+    }
+    
+    // Set cookies and return HTML
+    res.set_cookie("last_visit", "2025-01-01")
+       .set_header("X-Custom", "value")
+       .html(html! {
+           h1 { "Dashboard" }
+       })
+}
+
+// API endpoint returning JSON
+pub async fn users(state: AppState, req: Req, res: Res) -> Res {
+    let users = get_users(&state.db).await;
+    res.json(&users)
 }
 ```
 
@@ -133,17 +199,19 @@ let app = App::with_state(8080, create_router(), state);
 
 ### Route signatures
 
-All routes and layouts must accept state as the first parameter:
+Routes and layouts receive state as a plain value (not wrapped in `State`):
 
 ```rust
 // Stateless
-pub async fn page(State(_): State<()>) -> Markup { ... }
-pub async fn layout(State(_): State<()>, children: Children) -> Markup { ... }
+pub async fn page(req: Req, res: Res) -> Res { ... }
+pub async fn layout(req: Req, res: Res, children: Children) -> Res { ... }
 
 // Stateful  
-pub async fn page(State(state): State<AppState>) -> Markup { ... }
-pub async fn layout(State(state): State<AppState>, children: Children) -> Markup { ... }
+pub async fn page(state: AppState, req: Req, res: Res) -> Res { ... }
+pub async fn layout(state: AppState, req: Req, res: Res, children: Children) -> Res { ... }
 ```
+
+Note: The codegen handles Axum's `State` extraction internally; user code receives the unwrapped state value.
 
 ## Database Support
 
@@ -238,16 +306,33 @@ This tells Tailwind to scan Rust and TSX files for class names.
 ## Public Exports
 
 From `src/lib.rs`:
+
+**Root level:**
 - `App` - Server struct
-- `State`, `Path` - Axum extractors
+- `Req` - Incoming request data (headers, cookies, method, uri)
+- `Res` - Response builder with `set_*` mutators and finalizers
 - `Children` - Type alias for layout children (`Markup`)
-- `island_fn`, `island!` - Island support
-- `json` - serde_json re-export
+- `Path` - Axum path extractor for dynamic routes
+- `html!`, `Markup`, `DOCTYPE`, `PreEscaped` - Maud re-exports (flattened)
+- `json` - serde_json::json macro
+- `island!`, `island_fn` - Island support
 - `routes!` - Include generated routes
-- `html::*` - Maud re-exports (`html!`, `Markup`, `DOCTYPE`, `PreEscaped`)
-- `db::*` - SQLite support
-- `env::*` - Environment variable macro
-- `codegen::*` - Build-time route generation
+
+**Prelude module:**
+```rust
+use rejoice::prelude::*;
+// Brings in: App, Req, Res, Children, Path, html, Markup, DOCTYPE, PreEscaped, json, island
+```
+
+**Feature-gated:**
+- `db::*` - SQLite support (requires `sqlite` feature)
+
+**Internal (doc-hidden):**
+- `State`, `Router`, `routing` - Used by generated code
+
+## Dependencies
+
+**IMPORTANT:** All dependencies in `Cargo.toml` must use exact versions (e.g., `"1.0.148"` not `"1"`). When adding or updating dependencies, always pin to a specific patch version.
 
 ## Maintenance Checklist
 
@@ -259,3 +344,4 @@ When modifying the framework:
 4. **Changing CLI commands** → Update clap definitions in `main.rs`
 5. **Changing generated project structure** → Update `init.rs` step count and file generation
 6. **Any significant changes** → Update this `AGENTS.md` file
+7. **ANY change to the framework** → Update `LLM_DOCS.md` to reflect the change. This file is the comprehensive user-facing documentation for AI agents building apps with Rejoice. It MUST stay perfectly in sync with the actual framework behavior. When in doubt, update it.

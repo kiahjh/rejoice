@@ -121,7 +121,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-maud = {{ version = "0.27", features = ["axum"] }}
+maud = "0.27.0"
 {}
 tokio = {{ version = "1.48.0", features = ["full"] }}
 
@@ -192,33 +192,29 @@ async fn main() {
 fn write_index_route(project_dir: &Path, with_db: bool) {
     let content = if with_db {
         r#"use crate::AppState;
-use rejoice::{
-    State,
-    html::{Markup, html},
-    island,
-};
+use rejoice::{Req, Res, html, island};
 
-pub async fn page(State(_state): State<AppState>) -> Markup {
-    html! {
+pub async fn page(state: AppState, req: Req, res: Res) -> Res {
+    let _ = (state, req); // Silence unused warnings
+
+    res.html(html! {
         h1 { "Welcome to Rejoice!" }
         p { "Click the button below - it's a SolidJS island!" }
         (island!(Counter, { initial: 0 }))
-    }
+    })
 }
 "#
     } else {
-        r#"use rejoice::{
-    State,
-    html::{Markup, html},
-    island,
-};
+        r#"use rejoice::{Req, Res, html, island};
 
-pub async fn page(State(_): State<()>) -> Markup {
-    html! {
+pub async fn page(req: Req, res: Res) -> Res {
+    let _ = req; // Silence unused warning
+
+    res.html(html! {
         h1 { "Welcome to Rejoice!" }
         p { "Click the button below - it's a SolidJS island!" }
         (island!(Counter, { initial: 0 }))
-    }
+    })
 }
 "#
     };
@@ -229,13 +225,12 @@ pub async fn page(State(_): State<()>) -> Markup {
 fn write_layout(project_dir: &Path, with_db: bool) {
     let content = if with_db {
         r#"use crate::AppState;
-use rejoice::{
-    Children, State,
-    html::{DOCTYPE, Markup, html},
-};
+use rejoice::{Children, Req, Res, html, DOCTYPE};
 
-pub async fn layout(State(_state): State<AppState>, children: Children) -> Markup {
-    html! {
+pub async fn layout(state: AppState, req: Req, res: Res, children: Children) -> Res {
+    let _ = (state, req); // Silence unused warnings
+
+    res.html(html! {
         (DOCTYPE)
         html {
             head {
@@ -245,17 +240,16 @@ pub async fn layout(State(_state): State<AppState>, children: Children) -> Marku
                 (children)
             }
         }
-    }
+    })
 }
 "#
     } else {
-        r#"use rejoice::{
-    Children, State,
-    html::{DOCTYPE, Markup, html},
-};
+        r#"use rejoice::{Children, Req, Res, html, DOCTYPE};
 
-pub async fn layout(State(_): State<()>, children: Children) -> Markup {
-    html! {
+pub async fn layout(req: Req, res: Res, children: Children) -> Res {
+    let _ = req; // Silence unused warning
+
+    res.html(html! {
         (DOCTYPE)
         html {
             head {
@@ -265,7 +259,7 @@ pub async fn layout(State(_): State<()>, children: Children) -> Markup {
                 (children)
             }
         }
-    }
+    })
 }
 "#
     };

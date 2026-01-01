@@ -1,6 +1,6 @@
 [package]
 name = "rejoice"
-version = "0.9.2"
+version = "0.10.0"
 edition = "2024"
 description = "A simple and delightful little web framework for Rust"
 license = "MIT"
@@ -10,22 +10,23 @@ categories = ["web-programming::http-server"]
 
 [dependencies]
 axum = { version = "0.8.4", features = ["macros", "ws"] }
-clap = { version = "4", features = ["derive"] }
-colored = "2"
+clap = { version = "4.5.53", features = ["derive"] }
+colored = "2.2.0"
 dotenvy_macro = "0.15.7"
-futures = "0.3"
-html-escape = "0.2"
-maud = { version = "0.27", features = ["axum"] }
+futures = "0.3.31"
+html-escape = "0.2.13"
+maud = { version = "0.27.0", features = ["axum"] }
+serde = "1.0.228"
 notify = { version = "8.2.0", features = ["macos_fsevent"] }
-serde_json = "1"
-sqlx = { version = "0.8", features = [
+serde_json = "1.0.148"
+sqlx = { version = "0.8.6", features = [
     "runtime-tokio",
     "sqlite",
     "chrono",
     "uuid",
 ], optional = true }
 tokio = { version = "1.46.0", features = ["full"] }
-tokio-stream = "0.1"
+tokio-stream = "0.1.17"
 tower = "0.5.2"
 tower-http = { version = "0.6.8", features = ["cors", "fs"] }
 
