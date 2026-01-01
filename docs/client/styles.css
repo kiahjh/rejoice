@@ -270,7 +270,7 @@ body::after {
 .nav-link::after {
   content: "";
   position: absolute;
-  bottom: -5.5px;
+  bottom: -4.5px;
   left: 0;
   right: 0;
   height: 1px;

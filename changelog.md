@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.1
+
+- Route names with underscores like `foo_bar.rs` now get converted to `/foo-bar`
+
 ## 0.10.0
 
 - Added `Req` type for read-only access to incoming request data (headers, cookies, method, uri)
