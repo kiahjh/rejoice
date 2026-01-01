@@ -115,7 +115,9 @@ fn collect_layouts_and_routes(
         let file_name = path.file_name().unwrap().to_str().unwrap();
 
         if path.is_dir() {
-            let new_url_prefix = format!("{}/{}", url_prefix, file_name);
+            // Convert underscores to hyphens for directory URL segments
+            let url_segment = file_name.replace('_', "-");
+            let new_url_prefix = format!("{}/{}", url_prefix, url_segment);
             let new_mod_prefix = if mod_prefix.is_empty() {
                 file_name.to_string()
             } else {
@@ -144,7 +146,10 @@ fn collect_layouts_and_routes(
                         Some(param_name.to_string()),
                     )
                 } else {
-                    (stem.to_string(), stem.to_string(), None)
+                    // Convert underscores to hyphens for URL segments
+                    // e.g., project_structure.rs -> /project-structure
+                    let url_segment = stem.replace('_', "-");
+                    (stem.to_string(), url_segment, None)
                 };
 
             let url_path = if stem == "index" {

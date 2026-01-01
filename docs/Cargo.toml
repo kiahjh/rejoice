@@ -1,0 +1,14 @@
+[package]
+name = "docs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+maud = "0.27.0"
+rejoice = { path = "../rejoice" }
+tokio = { version = "1.48.0", features = ["full"] }
+pulldown-cmark = "0.13.0"
+html-escape = "0.2.13"
+
+[build-dependencies]
+rejoice = { path = "../rejoice" }
