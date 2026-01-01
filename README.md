@@ -49,15 +49,12 @@ src/routes/
 Each route file exports a `page` function:
 
 ```rust
-use rejoice::{
-    State,
-    html::{Markup, html},
-};
+use rejoice::{Req, Res, html};
 
-pub async fn page(State(_): State<()>) -> Markup {
-    html! {
+pub async fn page(req: Req, res: Res) -> Res {
+    res.html(html! {
         h1 { "Hello, world!" }
-    }
+    })
 }
 ```
 
@@ -66,13 +63,10 @@ pub async fn page(State(_): State<()>) -> Markup {
 Layouts wrap pages and nested layouts. Create a `layout.rs` file to share UI:
 
 ```rust
-use rejoice::{
-    Children, State,
-    html::{DOCTYPE, Markup, html},
-};
+use rejoice::{Children, Req, Res, html, DOCTYPE};
 
-pub async fn layout(State(_): State<()>, children: Children) -> Markup {
-    html! {
+pub async fn layout(req: Req, res: Res, children: Children) -> Res {
+    res.html(html! {
         (DOCTYPE)
         html {
             head { title { "My App" } }
@@ -82,7 +76,7 @@ pub async fn layout(State(_): State<()>, children: Children) -> Markup {
                 footer { "Built with Rejoice" }
             }
         }
-    }
+    })
 }
 ```
 
@@ -109,26 +103,22 @@ Access the database in your routes:
 
 ```rust
 use crate::AppState;
-use rejoice::{
-    State,
-    db::query_as,
-    html::{Markup, html},
-};
+use rejoice::{Req, Res, db::query_as, html};
 
-pub async fn page(State(state): State<AppState>) -> Markup {
+pub async fn page(state: AppState, req: Req, res: Res) -> Res {
     let users: Vec<(String,)> = query_as("SELECT name FROM users")
         .fetch_all(&state.db)
         .await
         .unwrap();
 
-    html! {
+    res.html(html! {
         h1 { "Users" }
         ul {
             @for user in &users {
                 li { (user.0) }
             }
         }
-    }
+    })
 }
 ```
 
@@ -163,8 +153,9 @@ async fn main() {
 Then access it in routes and layouts:
 
 ```rust
-pub async fn page(State(state): State<AppState>) -> Markup {
+pub async fn page(state: AppState, req: Req, res: Res) -> Res {
     // Use state.db, state.config, etc.
+    res.html(html! { /* ... */ })
 }
 ```
 
@@ -173,17 +164,13 @@ pub async fn page(State(state): State<AppState>) -> Markup {
 Add interactive components to your pages:
 
 ```rust
-use rejoice::{
-    State,
-    html::{Markup, html},
-    island,
-};
+use rejoice::{Req, Res, html, island};
 
-pub async fn page(State(_): State<()>) -> Markup {
-    html! {
+pub async fn page(req: Req, res: Res) -> Res {
+    res.html(html! {
         h1 { "My Page" }
         (island!(Counter, { initial: 0 }))
-    }
+    })
 }
 ```
 
@@ -209,16 +196,13 @@ That's it! The island is automatically registered and hydrated on the client.
 Tailwind CSS v4 is included out of the box. Just use Tailwind classes in your Rust templates or TSX components:
 
 ```rust
-use rejoice::{
-    State,
-    html::{Markup, html},
-};
+use rejoice::{Req, Res, html};
 
-pub async fn page(State(_): State<()>) -> Markup {
-    html! {
+pub async fn page(req: Req, res: Res) -> Res {
+    res.html(html! {
         h1 class="text-4xl font-bold text-blue-600" { "Hello!" }
         p class="mt-4 text-gray-700" { "Styled with Tailwind." }
-    }
+    })
 }
 ```
 

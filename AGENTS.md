@@ -345,3 +345,4 @@ When modifying the framework:
 5. **Changing generated project structure** → Update `init.rs` step count and file generation
 6. **Any significant changes** → Update this `AGENTS.md` file
 7. **ANY change to the framework** → Update `LLM_DOCS.md` to reflect the change. This file is the comprehensive user-facing documentation for AI agents building apps with Rejoice. It MUST stay perfectly in sync with the actual framework behavior. When in doubt, update it.
+8. **ANY change to the framework** → Update `README.md` if the change affects user-facing features, API usage examples, or getting started instructions. The README is the first thing users see, so it must accurately reflect how the framework works.
