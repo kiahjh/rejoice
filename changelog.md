@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.0
+
+- Added support for other http methods (GET, POST, PUT, DELETE, PATCH) and body parsing
+
 ## 0.10.1
 
 - Route names with underscores like `foo_bar.rs` now get converted to `/foo-bar`

@@ -1,6 +1,6 @@
 # Request Object
 
-The `Req` type provides read-only access to incoming request data.
+The `Req` type provides access to incoming request data including headers, cookies, and body.
 
 ## Structure
 
@@ -10,6 +10,7 @@ pub struct Req {
     pub cookies: Cookies,     // Parsed cookies
     pub method: Method,       // HTTP method
     pub uri: Uri,             // Request URI
+    pub body: Body,           // Request body
 }
 ```
 
@@ -20,7 +21,7 @@ Access HTTP headers from the request:
 ```rust
 use rejoice::{Req, Res, html};
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     // Get a specific header
     let user_agent = req.headers
         .get("user-agent")
@@ -41,7 +42,7 @@ pub async fn page(req: Req, res: Res) -> Res {
 Access cookies from the request:
 
 ```rust
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     // Get a specific cookie
     let session = req.cookies.get("session_id");
     
@@ -64,24 +65,72 @@ pub async fn page(req: Req, res: Res) -> Res {
 }
 ```
 
-## HTTP Method
+## Request Body
 
-Check the request method:
+The `body` field provides methods for parsing POST/PUT/PATCH request data.
+
+### Parsing Form Data
 
 ```rust
-pub async fn page(req: Req, res: Res) -> Res {
-    let method = req.method.as_str();
-    
-    match method {
-        "GET" => { /* handle GET */ }
-        "POST" => { /* handle POST */ }
-        _ => { /* other methods */ }
-    }
-    
-    res.html(html! {
-        p { "Method: " (method) }
-    })
+use rejoice::{Req, Res, html};
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct ContactForm {
+    name: String,
+    email: String,
+    message: String,
 }
+
+pub async fn post(req: Req, res: Res) -> Res {
+    let Ok(form) = req.body.as_form::<ContactForm>() else {
+        return res.bad_request("Invalid form data");
+    };
+    
+    // Use form.name, form.email, form.message...
+    res.redirect("/thank-you")
+}
+```
+
+### Parsing JSON
+
+```rust
+use rejoice::{Req, Res, json};
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct CreateUser {
+    name: String,
+    email: String,
+}
+
+pub async fn post(req: Req, res: Res) -> Res {
+    let Ok(data) = req.body.as_json::<CreateUser>() else {
+        return res.bad_request("Invalid JSON");
+    };
+    
+    // Create user...
+    res.json(&json!({ "id": 1, "name": data.name }))
+}
+```
+
+### Body Methods
+
+```rust
+// Check if body is empty
+req.body.is_empty()
+
+// Get raw bytes
+req.body.as_bytes()
+
+// Parse as UTF-8 text
+req.body.as_text() -> Result<String, BodyParseError>
+
+// Parse as JSON
+req.body.as_json::<T>() -> Result<T, BodyParseError>
+
+// Parse as form data (application/x-www-form-urlencoded)
+req.body.as_form::<T>() -> Result<T, BodyParseError>
 ```
 
 ## URI and Path
@@ -89,7 +138,7 @@ pub async fn page(req: Req, res: Res) -> Res {
 Access the request URI:
 
 ```rust
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     let path = req.uri.path();           // "/users/123"
     let query = req.uri.query();         // Some("page=2&sort=name")
     let full_uri = req.uri.to_string();  // "/users/123?page=2&sort=name"
@@ -108,7 +157,7 @@ pub async fn page(req: Req, res: Res) -> Res {
 Common pattern for checking authentication:
 
 ```rust
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     let session = req.cookies.get("session_id");
     
     let Some(session_id) = session else {

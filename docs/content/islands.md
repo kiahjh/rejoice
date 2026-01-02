@@ -45,7 +45,7 @@ Use the `island!` macro in your Rust templates:
 ```rust
 use rejoice::{Req, Res, html, island};
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     res.html(html! {
         h1 { "Interactive Counter" }
         

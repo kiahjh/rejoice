@@ -1,6 +1,6 @@
 use rejoice::{Req, Res};
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     let _ = req;
 
     // Serve the LLM_DOCS.md file as plain text

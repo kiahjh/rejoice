@@ -1,5 +1,6 @@
 use rejoice::App;
 
+pub mod components;
 pub mod markdown;
 
 rejoice::routes!();

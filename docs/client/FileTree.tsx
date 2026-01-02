@@ -29,31 +29,39 @@ function FileTreeNode(props: { item: FileTreeItem; depth: number }): JSX.Element
   const isFolder = () => props.item.type === "folder";
   const hasChildren = () => isFolder() && props.item.children && props.item.children.length > 0;
 
+  // Smaller indentation on mobile
+  const indent = () => {
+    const base = window.innerWidth < 640 ? 12 : 20;
+    return props.depth * base + 8;
+  };
+
   return (
     <div>
       <div
-        class="flex items-center gap-2 py-1.5 px-2 my-0.5 rounded-lg transition-colors cursor-default hover:bg-white/5"
-        style={{ "padding-left": `${props.depth * 20 + 8}px` }}
+        class="flex items-start sm:items-center gap-2 py-1.5 px-2 my-0.5 rounded-lg transition-colors cursor-default hover:bg-white/5"
+        style={{ "padding-left": `${indent()}px` }}
         onClick={() => hasChildren() && setExpanded(!expanded())}
       >
-        <span class="flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center">
+        <span class="flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center mt-0.5 sm:mt-0">
           <Show when={isFolder()} fallback={<FileIcon name={props.item.name} />}>
             <FolderIcon expanded={expanded()} />
           </Show>
         </span>
 
-        <span
-          style={{ color: isFolder() ? "var(--text-bright)" : "var(--text)" }}
-          class={isFolder() ? "font-medium" : ""}
-        >
-          {props.item.name}
-        </span>
-
-        <Show when={props.item.comment}>
-          <span class="ml-auto pl-4 text-xs italic" style={{ color: "var(--text-ghost)" }}>
-            {props.item.comment}
+        <div class="flex flex-col sm:flex-row sm:items-center gap-0 sm:gap-2 min-w-0 flex-1">
+          <span
+            style={{ color: isFolder() ? "var(--text-bright)" : "var(--text)" }}
+            class={`truncate ${isFolder() ? "font-medium" : ""}`}
+          >
+            {props.item.name}
           </span>
-        </Show>
+
+          <Show when={props.item.comment}>
+            <span class="text-xs italic truncate sm:ml-auto opacity-50" style={{ color: "var(--ink-soft)" }}>
+              {props.item.comment}
+            </span>
+          </Show>
+        </div>
       </div>
 
       <Show when={hasChildren() && expanded()}>

@@ -94,14 +94,27 @@ Scans `src/routes/` recursively:
 - `[id].rs` → `/:id` (dynamic segment)
 - `layout.rs` → Wrapper for sibling/child routes
 
+### HTTP Method Detection
+
+Route files export functions named after HTTP methods:
+- `get` → GET request handler
+- `post` → POST request handler
+- `put` → PUT request handler
+- `delete` → DELETE request handler
+- `patch` → PATCH request handler
+
+A single route file can export multiple handlers for different methods.
+
 ### Generated wrapper functions
 
 For routes with layouts, generates wrapper functions that:
 1. Extract state via Axum's `State` extractor (internally)
-2. Extract `Req` and `Res` from the request
-3. Call the page function with `(state, req, res)` or `(req, res)`
+2. Extract `Res` from request parts and `Req` from the full request (including body)
+3. Call the handler function with `(state, req, res)` or `(req, res)`
 4. If the response is HTML, wrap with layouts (innermost to outermost)
 5. If the response is not HTML (redirect, JSON, etc.), return it directly without layout wrapping
+
+Note: `Req` is extracted last because it consumes the request body.
 
 The `__RejoiceState` type alias is defined by the `routes!()` macro:
 - `routes!()` → `type __RejoiceState = ();`
@@ -121,7 +134,7 @@ pub fn create_router() -> axum::Router<__RejoiceState> {
 
 ### `Req` - Incoming Request
 
-The `Req` type provides read-only access to request data:
+The `Req` type provides access to request data including body:
 
 ```rust
 pub struct Req {
@@ -129,11 +142,16 @@ pub struct Req {
     pub cookies: Cookies,     // Parsed cookies
     pub method: Method,       // GET, POST, etc.
     pub uri: Uri,             // Request URI
+    pub body: Body,           // Request body (for POST, PUT, etc.)
 }
 
 // Reading request data
 let auth = req.headers.get("Authorization");
 let session = req.cookies.get("session_id");
+
+// Parsing POST body
+let form = req.body.as_form::<MyForm>()?;
+let json = req.body.as_json::<MyData>()?;
 ```
 
 ### `Res` - Response Builder
@@ -157,7 +175,7 @@ The `Res` type uses interior mutability for building responses.
 **Example usage:**
 
 ```rust
-pub async fn page(state: AppState, req: Req, res: Res) -> Res {
+pub async fn get(state: AppState, req: Req, res: Res) -> Res {
     // Read cookies
     let session = req.cookies.get("session");
     
@@ -175,10 +193,21 @@ pub async fn page(state: AppState, req: Req, res: Res) -> Res {
 }
 
 // API endpoint returning JSON
-pub async fn users(state: AppState, req: Req, res: Res) -> Res {
+pub async fn get(state: AppState, req: Req, res: Res) -> Res {
     let users = get_users(&state.db).await;
     res.json(&users)
 }
+```
+
+**Error helpers:**
+
+```rust
+res.bad_request("Invalid input")    // 400
+res.unauthorized("Please log in")   // 401
+res.forbidden("Access denied")      // 403
+res.not_found("Page not found")     // 404
+res.internal_error("Server error")  // 500
+```
 ```
 
 ## App and State
@@ -203,11 +232,13 @@ Routes and layouts receive state as a plain value (not wrapped in `State`):
 
 ```rust
 // Stateless
-pub async fn page(req: Req, res: Res) -> Res { ... }
+pub async fn get(req: Req, res: Res) -> Res { ... }
+pub async fn post(req: Req, res: Res) -> Res { ... }
 pub async fn layout(req: Req, res: Res, children: Children) -> Res { ... }
 
 // Stateful  
-pub async fn page(state: AppState, req: Req, res: Res) -> Res { ... }
+pub async fn get(state: AppState, req: Req, res: Res) -> Res { ... }
+pub async fn post(state: AppState, req: Req, res: Res) -> Res { ... }
 pub async fn layout(state: AppState, req: Req, res: Res, children: Children) -> Res { ... }
 ```
 
@@ -225,6 +256,7 @@ rejoice = { version = "...", features = ["sqlite"] }
 Exports in `src/db.rs` (only available with `sqlite` feature):
 - `Pool`, `Sqlite` - sqlx types
 - `query`, `query_as` - sqlx query functions/macros
+- `FromRow` - Derive macro for mapping query results to structs
 - `PoolConfig`, `create_pool` - Pool creation helpers
 
 Users access via `rejoice::db::*`.

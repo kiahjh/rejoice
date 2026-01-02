@@ -32,7 +32,7 @@ Here's a complete Rejoice page:
 ```rust
 use rejoice::{Req, Res, html};
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     res.html(html! {
         h1 { "Hello from Rejoice!" }
         p { "This is a server-rendered page." }

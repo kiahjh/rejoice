@@ -1,7 +1,7 @@
 use crate::markdown::code_block_with_filename;
 use rejoice::{html, island, json, Req, Res};
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     let _ = req;
 
     let nested_layout_tree = json!([
@@ -115,7 +115,7 @@ pub async fn layout(state: AppState, req: Req, res: Res, children: Children) -> 
             li { "File downloads" }
         }
 
-        (code_block_with_filename(r#"pub async fn page(req: Req, res: Res) -> Res {
+        (code_block_with_filename(r#"pub async fn get(req: Req, res: Res) -> Res {
     let session = req.cookies.get("session_id");
     
     if session.is_none() {

@@ -22,19 +22,36 @@ File names with underscores are converted to hyphens in URLs:
 | `src/routes/about_us.rs` | `/about-us` |
 | `src/routes/contact_form.rs` | `/contact-form` |
 
-## Basic Route
+## HTTP Methods
 
-Every route file must export an async `page` function:
+Route files export functions named after HTTP methods:
 
 ```rust
 use rejoice::{Req, Res, html};
 
-pub async fn page(req: Req, res: Res) -> Res {
+// Handle GET requests
+pub async fn get(req: Req, res: Res) -> Res {
     res.html(html! {
         h1 { "Hello, World!" }
     })
 }
+
+// Handle POST requests
+pub async fn post(req: Req, res: Res) -> Res {
+    // Process form data...
+    res.redirect("/success")
+}
 ```
+
+A single route file can export multiple handlers for different HTTP methods.
+
+### Supported Methods
+
+- `get` → GET requests
+- `post` → POST requests
+- `put` → PUT requests
+- `delete` → DELETE requests
+- `patch` → PATCH requests
 
 ## Index Routes
 
@@ -53,14 +70,14 @@ Use square brackets for dynamic path segments:
 ```rust
 use rejoice::{Req, Res, html};
 
-pub async fn page(req: Req, res: Res, id: String) -> Res {
+pub async fn get(req: Req, res: Res, id: String) -> Res {
     res.html(html! {
         h1 { "User " (id) }
     })
 }
 ```
 
-The parameter is passed as the last argument to your `page` function.
+The parameter is passed as the last argument to your handler function.
 
 ### Examples
 
@@ -78,10 +95,11 @@ For apps without shared state (using `routes!()`):
 
 ```rust
 // Basic route
-pub async fn page(req: Req, res: Res) -> Res
+pub async fn get(req: Req, res: Res) -> Res
+pub async fn post(req: Req, res: Res) -> Res
 
 // Dynamic route
-pub async fn page(req: Req, res: Res, id: String) -> Res
+pub async fn get(req: Req, res: Res, id: String) -> Res
 ```
 
 ### Stateful Routes
@@ -90,10 +108,11 @@ For apps with shared state (using `routes!(AppState)`):
 
 ```rust
 // Basic route
-pub async fn page(state: AppState, req: Req, res: Res) -> Res
+pub async fn get(state: AppState, req: Req, res: Res) -> Res
+pub async fn post(state: AppState, req: Req, res: Res) -> Res
 
 // Dynamic route  
-pub async fn page(state: AppState, req: Req, res: Res, id: String) -> Res
+pub async fn get(state: AppState, req: Req, res: Res, id: String) -> Res
 ```
 
 ## Nested Directories

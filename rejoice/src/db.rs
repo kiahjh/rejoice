@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 // Re-export sqlx types and query functions/macros
-pub use sqlx::{Pool, Sqlite, query, query_as};
+pub use sqlx::{Pool, Sqlite, query, query_as, FromRow};
 
 pub struct PoolConfig {
     pub db_url: String,

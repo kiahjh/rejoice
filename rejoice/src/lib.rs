@@ -13,7 +13,7 @@ pub use dotenvy_macro;
 
 // Core types
 pub use app::App;
-pub use request::Req;
+pub use request::{Body, BodyParseError, Req};
 pub use response::Res;
 
 // Axum extractors that are still useful

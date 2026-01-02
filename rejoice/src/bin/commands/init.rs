@@ -194,7 +194,7 @@ fn write_index_route(project_dir: &Path, with_db: bool) {
         r#"use crate::AppState;
 use rejoice::{Req, Res, html, island};
 
-pub async fn page(state: AppState, req: Req, res: Res) -> Res {
+pub async fn get(state: AppState, req: Req, res: Res) -> Res {
     let _ = (state, req); // Silence unused warnings
 
     res.html(html! {
@@ -207,7 +207,7 @@ pub async fn page(state: AppState, req: Req, res: Res) -> Res {
     } else {
         r#"use rejoice::{Req, Res, html, island};
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     let _ = req; // Silence unused warning
 
     res.html(html! {

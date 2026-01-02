@@ -1,4 +1,5 @@
-use rejoice::{html, Children, Req, Res};
+use crate::components::logo;
+use rejoice::{html, island, Children, Req, Res};
 
 pub async fn layout(req: Req, res: Res, children: Children) -> Res {
     let current_path = req.uri.path();
@@ -19,8 +20,13 @@ pub async fn layout(req: Req, res: Res, children: Children) -> Res {
                             path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" {}
                         }
                     }
-                    a href="/" class="text-2xl" {
-                        span class="hero-title-accent" { "Rejoice" }
+                    a href="/" class="text-2xl flex items-center gap-1" {
+                        (logo("w-7 h-7"))
+                        span class="hero-title-accent mr-1" { "Rejoice" }
+                        span class="text-xs font-medium px-2 py-0.5 rounded-full"
+                            style="background: var(--ember-whisper); color: var(--ember-bright); border: 1px solid var(--line);" {
+                            "v" (env!("CARGO_PKG_VERSION"))
+                        }
                     }
                 }
                 div class="flex items-center gap-6" {
@@ -60,9 +66,18 @@ pub async fn layout(req: Req, res: Res, children: Children) -> Res {
 
             // Content area
             main class="flex-1 md:ml-72 min-w-0" {
-                div class="max-w-3xl mx-auto px-8 py-16" {
-                    article class="prose" {
+                div class="max-w-6xl mx-auto px-8 md:px-12 lg:px-16 py-16 xl:flex xl:gap-12" {
+                    // Main article
+                    article class="prose flex-1 min-w-0 max-w-2xl" {
                         (children)
+                    }
+                    
+                    // "On This Page" sidebar - hidden on smaller screens
+                    aside class="hidden xl:block w-56 flex-shrink-0" {
+                        div id="toc-container" class="sticky top-24" {
+                            // Populated by TableOfContents island
+                        }
+                        (island!(TableOfContents))
                     }
                 }
             }

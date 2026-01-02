@@ -57,12 +57,12 @@ async fn main() {
 ## Queries
 
 ```rust
-use rejoice::{Req, Res, html, db::{query, query_as}};
+use rejoice::{Req, Res, html, db::{query, query_as, FromRow}};
 
-#[derive(sqlx::FromRow)]
+#[derive(FromRow)]
 struct User { id: i32, name: String }
 
-pub async fn page(state: AppState, req: Req, res: Res) -> Res {
+pub async fn get(state: AppState, req: Req, res: Res) -> Res {
     // Typed query
     let users: Vec<User> = query_as("SELECT id, name FROM users")
         .fetch_all(&state.db)

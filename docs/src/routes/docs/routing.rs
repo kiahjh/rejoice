@@ -1,7 +1,7 @@
 use crate::markdown::code_block_with_filename;
 use rejoice::{html, island, json, Req, Res};
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     let _ = req;
 
     let nested_routes_tree = json!([
@@ -75,11 +75,11 @@ pub async fn page(req: Req, res: Res) -> Res {
 
         h2 { "Basic Route" }
 
-        p { "Every route file must export an async " code { "page" } " function:" }
+        p { "Route files export functions named after HTTP methods like " code { "get" } " or " code { "post" } ":" }
 
         (code_block_with_filename(r#"use rejoice::{Req, Res, html};
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     res.html(html! {
         h1 { "Hello, World!" }
     })
@@ -103,13 +103,13 @@ pub async fn page(req: Req, res: Res) -> Res {
 
         (code_block_with_filename(r#"use rejoice::{Req, Res, html};
 
-pub async fn page(req: Req, res: Res, id: String) -> Res {
+pub async fn get(req: Req, res: Res, id: String) -> Res {
     res.html(html! {
         h1 { "User " (id) }
     })
 }"#, "rust", Some("src/routes/users/[id].rs")))
 
-        p { "The parameter is passed as the last argument to your " code { "page" } " function." }
+        p { "The parameter is passed as the last argument to your handler function." }
 
         h3 { "Examples" }
 
@@ -135,20 +135,20 @@ pub async fn page(req: Req, res: Res, id: String) -> Res {
         p { "For apps without shared state (using " code { "routes!()" } "):" }
 
         (code_block_with_filename(r#"// Basic route
-pub async fn page(req: Req, res: Res) -> Res
+pub async fn get(req: Req, res: Res) -> Res
 
 // Dynamic route
-pub async fn page(req: Req, res: Res, id: String) -> Res"#, "rust", None))
+pub async fn get(req: Req, res: Res, id: String) -> Res"#, "rust", None))
 
         h3 { "Stateful Routes" }
 
         p { "For apps with shared state (using " code { "routes!(AppState)" } "):" }
 
         (code_block_with_filename(r#"// Basic route
-pub async fn page(state: AppState, req: Req, res: Res) -> Res
+pub async fn get(state: AppState, req: Req, res: Res) -> Res
 
 // Dynamic route  
-pub async fn page(state: AppState, req: Req, res: Res, id: String) -> Res"#, "rust", None))
+pub async fn get(state: AppState, req: Req, res: Res, id: String) -> Res"#, "rust", None))
 
         h2 { "Nested Directories" }
 

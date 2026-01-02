@@ -163,3 +163,12 @@ w-8
 z-10
 z-40
 z-50
+xl:block
+xl:flex
+xl:gap-12
+w-56
+sticky
+top-24
+space-y-0.5
+border-l-2
+max-w-7xl

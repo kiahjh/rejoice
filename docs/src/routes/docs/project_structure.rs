@@ -1,7 +1,7 @@
 use crate::markdown::code_block_with_filename;
 use rejoice::{html, island, json, Req, Res};
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     let _ = req;
 
     // Define the file tree structure as JSON for the island

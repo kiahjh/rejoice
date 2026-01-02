@@ -1,7 +1,8 @@
+use crate::components::logo;
 use crate::markdown::code_block_with_filename;
 use rejoice::{html, Markup, Req, Res};
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     let _ = req;
 
     res.html(html! {
@@ -9,8 +10,13 @@ pub async fn page(req: Req, res: Res) -> Res {
         nav class="fixed top-0 left-0 right-0 z-50 border-b backdrop-blur-xl" 
             style="border-color: var(--line); background: linear-gradient(180deg, rgba(10,9,8,0.95), rgba(10,9,8,0.85));" {
             div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between" {
-                a href="/" class="text-2xl" {
+                a href="/" class="text-2xl flex items-center gap-1.5" {
+                    (logo("w-7 h-7"))
                     span class="hero-title-accent" { "Rejoice" }
+                    span class="text-xs font-medium px-2 py-0.5 rounded-full"
+                        style="background: var(--ember-whisper); color: var(--ember-bright); border: 1px solid var(--line);" {
+                        "v" (env!("CARGO_PKG_VERSION"))
+                    }
                 }
                 div class="flex items-center gap-8" {
                     a href="/docs" class="nav-link text-sm font-medium py-1" style="color: var(--ink-soft);" { "Docs" }
@@ -100,7 +106,7 @@ pub async fn page(req: Req, res: Res) -> Res {
                         div class="min-w-0" {
                             (code_block_with_filename(r#"use rejoice::{Req, Res, html};
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     res.html(html! {
         h1 { "Hello, world!" }
         p { "Welcome to Rejoice." }
@@ -190,8 +196,9 @@ rejoice dev"#, "bash", None))
                             div class="w-12 h-px" style="background: linear-gradient(90deg, var(--line), transparent);" {}
                         }
                         
-                        p style="color: var(--ink-ghost);" {
+                        p class="flex items-center gap-1" style="color: var(--ink-ghost);" {
                             "Crafted with "
+                            (logo("w-4 h-4"))
                             span class="hero-title-accent" { "Rejoice" }
                         }
                         

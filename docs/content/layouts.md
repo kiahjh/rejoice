@@ -90,7 +90,7 @@ Non-HTML responses automatically bypass layouts. This is useful for:
 - File downloads
 
 ```rust
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     let session = req.cookies.get("session_id");
     
     if session.is_none() {

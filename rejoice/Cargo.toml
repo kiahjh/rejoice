@@ -1,10 +1,10 @@
 [package]
 name = "rejoice"
-version = "0.10.1"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 description = "A simple and delightful little web framework for Rust"
-license = "MIT"
-repository = "https://github.com/kiahjh/rejoice"
+license.workspace = true
+repository.workspace = true
 keywords = ["web", "framework", "routing", "axum"]
 categories = ["web-programming::http-server"]
 
@@ -17,6 +17,7 @@ futures = "0.3.31"
 html-escape = "0.2.13"
 maud = { version = "0.27.0", features = ["axum"] }
 serde = "1.0.228"
+serde_urlencoded = "0.7.1"
 notify = { version = "8.2.0", features = ["macos_fsevent"] }
 serde_json = "1.0.148"
 sqlx = { version = "0.8.6", features = [

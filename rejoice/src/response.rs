@@ -174,6 +174,53 @@ impl Res {
         self
     }
 
+    // === Error Response Helpers ===
+
+    /// Return a 400 Bad Request response with HTML message
+    pub fn bad_request(self, message: &str) -> Self {
+        self.inner.borrow_mut().status = Some(StatusCode::BAD_REQUEST);
+        self.html(maud::html! {
+            h1 { "Bad Request" }
+            p { (message) }
+        })
+    }
+
+    /// Return a 401 Unauthorized response with HTML message
+    pub fn unauthorized(self, message: &str) -> Self {
+        self.inner.borrow_mut().status = Some(StatusCode::UNAUTHORIZED);
+        self.html(maud::html! {
+            h1 { "Unauthorized" }
+            p { (message) }
+        })
+    }
+
+    /// Return a 403 Forbidden response with HTML message
+    pub fn forbidden(self, message: &str) -> Self {
+        self.inner.borrow_mut().status = Some(StatusCode::FORBIDDEN);
+        self.html(maud::html! {
+            h1 { "Forbidden" }
+            p { (message) }
+        })
+    }
+
+    /// Return a 404 Not Found response with HTML message
+    pub fn not_found(self, message: &str) -> Self {
+        self.inner.borrow_mut().status = Some(StatusCode::NOT_FOUND);
+        self.html(maud::html! {
+            h1 { "Not Found" }
+            p { (message) }
+        })
+    }
+
+    /// Return a 500 Internal Server Error response with HTML message
+    pub fn internal_error(self, message: &str) -> Self {
+        self.inner.borrow_mut().status = Some(StatusCode::INTERNAL_SERVER_ERROR);
+        self.html(maud::html! {
+            h1 { "Internal Server Error" }
+            p { (message) }
+        })
+    }
+
     /// Check if this response is HTML (for layout wrapping)
     pub fn is_html(&self) -> bool {
         matches!(self.inner.borrow().body, Some(ResBody::Html(_)))

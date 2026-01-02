@@ -11,7 +11,7 @@ pub async fn layout(req: Req, res: Res, children: Children) -> Res {
                 meta name="viewport" content="width=device-width, initial-scale=1";
                 title { "Rejoice - A delightful Rust web framework" }
                 meta name="description" content="A simple and delightful little web framework for Rust with file-based routing, SolidJS islands, and Tailwind CSS.";
-                link rel="icon" href="/favicon.ico";
+                link rel="icon" type="image/svg+xml" href="/favicon.svg";
                 // Fonts - Inter for UI, JetBrains Mono for code
                 link rel="preconnect" href="https://fonts.googleapis.com";
                 link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous";

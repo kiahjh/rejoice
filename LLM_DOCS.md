@@ -132,7 +132,7 @@ Output:
 
 ## Routes and Pages
 
-Routes are defined by creating `.rs` files in `src/routes/`. Each route file must export a `page` function.
+Routes are defined by creating `.rs` files in `src/routes/`. Each route file exports functions named after HTTP methods: `get`, `post`, `put`, `delete`, `patch`.
 
 ### File-to-URL Mapping
 
@@ -146,12 +146,33 @@ Routes are defined by creating `.rs` files in `src/routes/`. Each route file mus
 | `src/routes/users/[id].rs` | `/users/:id` (dynamic) |
 | `src/routes/blog/[slug].rs` | `/blog/:slug` (dynamic) |
 
+### HTTP Method Functions
+
+Each route file can export one or more HTTP method handlers:
+
+```rust
+use rejoice::{Req, Res, html};
+
+// GET request handler
+pub async fn get(req: Req, res: Res) -> Res {
+    res.html(html! {
+        h1 { "Hello, World!" }
+    })
+}
+
+// POST request handler
+pub async fn post(req: Req, res: Res) -> Res {
+    // Handle form submission, API call, etc.
+    res.redirect("/success")
+}
+```
+
 ### Stateless Route (No Application State)
 
 ```rust
 use rejoice::{Req, Res, html};
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     res.html(html! {
         h1 { "Hello, World!" }
     })
@@ -164,7 +185,7 @@ pub async fn page(req: Req, res: Res) -> Res {
 use crate::AppState;
 use rejoice::{Req, Res, html};
 
-pub async fn page(state: AppState, req: Req, res: Res) -> Res {
+pub async fn get(state: AppState, req: Req, res: Res) -> Res {
     // Access state.db, state.config, etc.
     res.html(html! {
         h1 { "Hello from stateful route!" }
@@ -176,28 +197,30 @@ pub async fn page(state: AppState, req: Req, res: Res) -> Res {
 
 **Stateless apps** (using `routes!()`):
 ```rust
-pub async fn page(req: Req, res: Res) -> Res
+pub async fn get(req: Req, res: Res) -> Res
+pub async fn post(req: Req, res: Res) -> Res
 ```
 
 **Stateful apps** (using `routes!(AppState)`):
 ```rust
-pub async fn page(state: AppState, req: Req, res: Res) -> Res
+pub async fn get(state: AppState, req: Req, res: Res) -> Res
+pub async fn post(state: AppState, req: Req, res: Res) -> Res
 ```
 
 **Dynamic routes** add a path parameter:
 ```rust
 // Stateless
-pub async fn page(req: Req, res: Res, id: String) -> Res
+pub async fn get(req: Req, res: Res, id: String) -> Res
 
 // Stateful
-pub async fn page(state: AppState, req: Req, res: Res, id: String) -> Res
+pub async fn get(state: AppState, req: Req, res: Res, id: String) -> Res
 ```
 
 ---
 
 ## Layouts
 
-Layouts wrap pages and provide shared UI. Create a `layout.rs` file in any routes directory.
+Layouts wrap pages and provide shared UI. Create a `layout.rs` file in any routes directory. Layouts export a `layout` function (not an HTTP method name).
 
 ### Root Layout
 
@@ -281,7 +304,7 @@ pub async fn layout(state: AppState, req: Req, res: Res, children: Children) -> 
 Non-HTML responses (redirects, JSON, raw) bypass layout wrapping automatically:
 
 ```rust
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     if !is_authenticated(&req) {
         // This redirect is NOT wrapped in layouts
         return res.redirect("/login");
@@ -298,7 +321,7 @@ pub async fn page(req: Req, res: Res) -> Res {
 
 ## Request Object (Req)
 
-The `Req` type provides read-only access to incoming request data.
+The `Req` type provides access to incoming request data including headers, cookies, method, URI, and body.
 
 ### Fields
 
@@ -308,6 +331,7 @@ pub struct Req {
     pub cookies: Cookies,     // Parsed cookies
     pub method: Method,       // HTTP method (GET, POST, etc.)
     pub uri: Uri,             // Request URI
+    pub body: Body,           // Request body (for POST, PUT, etc.)
 }
 ```
 
@@ -316,7 +340,7 @@ pub struct Req {
 ```rust
 use rejoice::{Req, Res, html};
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     // Get a specific header
     let user_agent = req.headers
         .get("user-agent")
@@ -336,7 +360,7 @@ pub async fn page(req: Req, res: Res) -> Res {
 ```rust
 use rejoice::{Req, Res, html};
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     // Get a specific cookie
     let session = req.cookies.get("session_id");
     
@@ -362,7 +386,7 @@ pub async fn page(req: Req, res: Res) -> Res {
 ```rust
 use rejoice::{Req, Res, html};
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     let method = req.method.as_str();  // "GET", "POST", etc.
     let path = req.uri.path();          // "/users/123"
     let query = req.uri.query();        // Some("page=2&sort=name")
@@ -372,6 +396,75 @@ pub async fn page(req: Req, res: Res) -> Res {
         p { "Path: " (path) }
     })
 }
+```
+
+### Request Body
+
+The `Body` type provides methods for parsing request body data (useful for POST, PUT, PATCH requests).
+
+#### Parsing JSON
+
+```rust
+use rejoice::{Req, Res, html};
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct LoginData {
+    email: String,
+    password: String,
+}
+
+pub async fn post(req: Req, res: Res) -> Res {
+    let Ok(data) = req.body.as_json::<LoginData>() else {
+        return res.bad_request("Invalid JSON");
+    };
+    
+    // Use data.email, data.password...
+    res.redirect("/dashboard")
+}
+```
+
+#### Parsing Form Data
+
+```rust
+use rejoice::{Req, Res, html};
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct ContactForm {
+    name: String,
+    email: String,
+    message: String,
+}
+
+pub async fn post(req: Req, res: Res) -> Res {
+    let Ok(form) = req.body.as_form::<ContactForm>() else {
+        return res.bad_request("Invalid form data");
+    };
+    
+    // Use form.name, form.email, form.message...
+    res.redirect("/thank-you")
+}
+```
+
+#### Body Methods
+
+```rust
+// Check if body is empty
+req.body.is_empty()
+
+// Get raw bytes
+req.body.as_bytes()
+
+// Parse as UTF-8 text
+req.body.as_text() -> Result<String, BodyParseError>
+
+// Parse as JSON into typed struct
+req.body.as_json::<T>() -> Result<T, BodyParseError>
+
+// Parse as form data (application/x-www-form-urlencoded)
+req.body.as_form::<T>() -> Result<T, BodyParseError>
+```
 ```
 
 ---
@@ -418,7 +511,7 @@ Finalizers consume the `Res` and return the final response:
 ```rust
 use rejoice::{Req, Res, html};
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     res.html(html! {
         h1 { "Hello, World!" }
     })
@@ -439,13 +532,13 @@ struct User {
     name: String,
 }
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     let user = User { id: 1, name: "Alice".into() };
     res.json(&user)
 }
 
 // Or with the json! macro:
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     res.json(&json!({
         "id": 1,
         "name": "Alice",
@@ -461,12 +554,12 @@ Returns: `200 OK` with `Content-Type: application/json`
 ```rust
 use rejoice::{Req, Res};
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     // Temporary redirect (302 Found)
     res.redirect("/login")
 }
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     // Permanent redirect (301 Moved Permanently)
     res.redirect_permanent("/new-url")
 }
@@ -477,7 +570,7 @@ pub async fn page(req: Req, res: Res) -> Res {
 ```rust
 use rejoice::{Req, Res};
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     let pdf_bytes = get_pdf_data();
     
     res.set_header("Content-Type", "application/pdf")
@@ -486,12 +579,48 @@ pub async fn page(req: Req, res: Res) -> Res {
 }
 ```
 
+### Error Response Helpers
+
+Convenient methods for common HTTP error responses:
+
+```rust
+use rejoice::{Req, Res};
+
+pub async fn post(req: Req, res: Res) -> Res {
+    // 400 Bad Request
+    res.bad_request("Invalid form data")
+}
+
+pub async fn get(req: Req, res: Res) -> Res {
+    // 401 Unauthorized
+    res.unauthorized("Please log in")
+}
+
+pub async fn get(req: Req, res: Res) -> Res {
+    // 403 Forbidden
+    res.forbidden("You don't have access")
+}
+
+pub async fn get(req: Req, res: Res) -> Res {
+    // 404 Not Found
+    res.not_found("Page not found")
+}
+
+pub async fn get(req: Req, res: Res) -> Res {
+    // 500 Internal Server Error
+    res.internal_error("Something went wrong")
+}
+```
+
+Each error helper returns an HTML response with the status code and message.
+```
+
 ### Chaining Example
 
 ```rust
 use rejoice::{Req, Res, html};
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     res.set_cookie("visited", "true")
        .set_header("X-Frame-Options", "DENY")
        .set_header("Cache-Control", "no-cache")
@@ -506,7 +635,7 @@ pub async fn page(req: Req, res: Res) -> Res {
 Cookies set on `res` apply to ALL subsequent responses:
 
 ```rust
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     // This cookie is set regardless of which branch executes
     res.set_cookie("last_visit", "2025-01-01");
     
@@ -704,7 +833,7 @@ async fn main() {
 ```rust
 use rejoice::{Req, Res, html};
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     res.html(html! { h1 { "Hello!" } })
 }
 ```
@@ -742,7 +871,7 @@ async fn main() {
 use crate::AppState;
 use rejoice::{Req, Res, html};
 
-pub async fn page(state: AppState, req: Req, res: Res) -> Res {
+pub async fn get(state: AppState, req: Req, res: Res) -> Res {
     // Use state.db, state.config, etc.
     res.html(html! { h1 { "Hello!" } })
 }
@@ -827,16 +956,16 @@ async fn main() {
 
 ```rust
 use crate::AppState;
-use rejoice::{Req, Res, html, db::{query, query_as}};
+use rejoice::{Req, Res, html, db::{query, query_as, FromRow}};
 
-#[derive(sqlx::FromRow)]
+#[derive(FromRow)]
 struct User {
     id: i32,
     name: String,
     email: String,
 }
 
-pub async fn page(state: AppState, req: Req, res: Res) -> Res {
+pub async fn get(state: AppState, req: Req, res: Res) -> Res {
     // Query with query_as (returns typed results)
     let users: Vec<User> = query_as("SELECT id, name, email FROM users")
         .fetch_all(&state.db)
@@ -876,6 +1005,7 @@ The `rejoice::db` module exports:
 - `Sqlite` - Database driver type
 - `query` - Raw query function
 - `query_as` - Typed query function
+- `FromRow` - Derive macro for mapping query results to structs
 - `PoolConfig` - Pool configuration struct
 - `create_pool` - Pool creation function
 
@@ -892,7 +1022,7 @@ Dynamic routes use square brackets in the filename: `[param].rs`
 ```rust
 use rejoice::{Req, Res, html};
 
-pub async fn page(req: Req, res: Res, id: String) -> Res {
+pub async fn get(req: Req, res: Res, id: String) -> Res {
     res.html(html! {
         h1 { "User ID: " (id) }
     })
@@ -905,7 +1035,7 @@ pub async fn page(req: Req, res: Res, id: String) -> Res {
 use crate::AppState;
 use rejoice::{Req, Res, html, db::query_as};
 
-pub async fn page(state: AppState, req: Req, res: Res, id: String) -> Res {
+pub async fn get(state: AppState, req: Req, res: Res, id: String) -> Res {
     let user_id: i32 = id.parse().unwrap_or(0);
     
     let user = query_as::<_, User>("SELECT * FROM users WHERE id = ?")
@@ -918,8 +1048,7 @@ pub async fn page(state: AppState, req: Req, res: Res, id: String) -> Res {
         Some(u) => res.html(html! {
             h1 { "User: " (u.name) }
         }),
-        None => res.set_status(StatusCode::NOT_FOUND)
-                   .html(html! { h1 { "User not found" } }),
+        None => res.not_found("User not found"),
     }
 }
 ```
@@ -972,7 +1101,7 @@ export default function Counter(props: CounterProps) {
 ```rust
 use rejoice::{Req, Res, html, island};
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     res.html(html! {
         h1 { "Interactive Counter" }
         
@@ -1036,18 +1165,20 @@ Tailwind CSS v4 is included and configured automatically.
 
 In Rust templates:
 ```rust
-html! {
-    div class="container mx-auto px-4" {
-        h1 class="text-4xl font-bold text-blue-600" {
-            "Welcome!"
+pub async fn get(req: Req, res: Res) -> Res {
+    res.html(html! {
+        div class="container mx-auto px-4" {
+            h1 class="text-4xl font-bold text-blue-600" {
+                "Welcome!"
+            }
+            p class="mt-4 text-gray-700 leading-relaxed" {
+                "This is styled with Tailwind."
+            }
+            button class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600" {
+                "Click me"
+            }
         }
-        p class="mt-4 text-gray-700 leading-relaxed" {
-            "This is styled with Tailwind."
-        }
-        button class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600" {
-            "Click me"
-        }
-    }
+    })
 }
 ```
 
@@ -1204,6 +1335,7 @@ use rejoice::db::{
     Sqlite,          // SQLite driver type
     query,           // Raw SQL query
     query_as,        // Typed SQL query
+    FromRow,         // Derive macro for result mapping
     PoolConfig,      // Pool configuration
     create_pool,     // Pool creation function
 };
@@ -1300,7 +1432,7 @@ pub async fn layout(req: Req, res: Res, children: Children) -> Res {
 ```rust
 use rejoice::{Req, Res, html};
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     let posts = vec![
         ("Hello World", "My first post"),
         ("Rust is Great", "Why I love Rust"),
@@ -1356,7 +1488,7 @@ pub async fn layout(state: AppState, req: Req, res: Res, children: Children) -> 
 use crate::AppState;
 use rejoice::{Req, Res, html, db::query_as};
 
-pub async fn page(state: AppState, req: Req, res: Res) -> Res {
+pub async fn get(state: AppState, req: Req, res: Res) -> Res {
     let session_id = req.cookies.get("session_id").unwrap();
     
     // Get user from session
@@ -1387,17 +1519,17 @@ pub async fn page(state: AppState, req: Req, res: Res) -> Res {
 **`src/routes/api/users.rs`**:
 ```rust
 use crate::AppState;
-use rejoice::{Req, Res, json, db::query_as};
+use rejoice::{Req, Res, json, db::{query_as, FromRow}};
 use serde::Serialize;
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize, FromRow)]
 struct User {
     id: i32,
     name: String,
     email: String,
 }
 
-pub async fn page(state: AppState, req: Req, res: Res) -> Res {
+pub async fn get(state: AppState, req: Req, res: Res) -> Res {
     let users: Vec<User> = query_as("SELECT id, name, email FROM users")
         .fetch_all(&state.db)
         .await
@@ -1477,7 +1609,7 @@ export default function TodoList(props: TodoListProps) {
 ```rust
 use rejoice::{Req, Res, html, island};
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     res.html(html! {
         h1 class="text-2xl font-bold mb-4" { "My Todos" }
         (island!(TodoList, { 
@@ -1493,27 +1625,32 @@ pub async fn page(req: Req, res: Res) -> Res {
 
 ### Returning Error Responses
 
+Use the built-in error helpers for common cases:
+
 ```rust
 use rejoice::{Req, Res, html};
-use axum::http::StatusCode;
 
-pub async fn page(req: Req, res: Res) -> Res {
-    let id = req.uri.path().strip_prefix("/users/");
-    
-    let Some(id) = id else {
-        return res.set_status(StatusCode::BAD_REQUEST)
-                  .html(html! { h1 { "Invalid request" } });
-    };
-    
-    let user = fetch_user(id).await;
+pub async fn get(req: Req, res: Res, id: String) -> Res {
+    let user = fetch_user(&id).await;
     
     match user {
         Ok(user) => res.html(html! {
             h1 { (user.name) }
         }),
-        Err(_) => res.set_status(StatusCode::NOT_FOUND)
-                     .html(html! { h1 { "User not found" } }),
+        Err(_) => res.not_found("User not found"),
     }
+}
+```
+
+Or set status manually for custom responses:
+
+```rust
+use rejoice::{Req, Res, html};
+use axum::http::StatusCode;
+
+pub async fn get(req: Req, res: Res) -> Res {
+    res.set_status(StatusCode::IM_A_TEAPOT)
+       .html(html! { h1 { "I'm a teapot" } })
 }
 ```
 
@@ -1523,7 +1660,7 @@ pub async fn page(req: Req, res: Res) -> Res {
 use rejoice::{Req, Res, json};
 use axum::http::StatusCode;
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     let result = process_request(&req).await;
     
     match result {
@@ -1534,6 +1671,74 @@ pub async fn page(req: Req, res: Res) -> Res {
                          "message": e.to_string()
                      })),
     }
+}
+```
+
+### Form Validation Example
+
+```rust
+use rejoice::{Req, Res, html};
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct SignupForm {
+    email: String,
+    password: String,
+}
+
+pub async fn post(req: Req, res: Res) -> Res {
+    let Ok(form) = req.body.as_form::<SignupForm>() else {
+        return res.bad_request("Invalid form data");
+    };
+    
+    if form.password.len() < 8 {
+        return res.bad_request("Password must be at least 8 characters");
+    }
+    
+    // Create user...
+    res.redirect("/welcome")
+}
+```
+
+### Complete Form Example (GET + POST)
+
+A single route file can handle multiple HTTP methods:
+
+**`src/routes/contact.rs`**:
+```rust
+use rejoice::{Req, Res, html};
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct ContactForm {
+    name: String,
+    email: String,
+    message: String,
+}
+
+// GET /contact - Display the form
+pub async fn get(req: Req, res: Res) -> Res {
+    res.html(html! {
+        h1 { "Contact Us" }
+        form method="post" {
+            input type="text" name="name" placeholder="Your name" required;
+            input type="email" name="email" placeholder="Your email" required;
+            textarea name="message" placeholder="Your message" required {}
+            button type="submit" { "Send" }
+        }
+    })
+}
+
+// POST /contact - Handle form submission
+pub async fn post(req: Req, res: Res) -> Res {
+    let Ok(form) = req.body.as_form::<ContactForm>() else {
+        return res.bad_request("Invalid form data");
+    };
+    
+    // Process the form (send email, save to database, etc.)
+    println!("Message from {}: {}", form.name, form.message);
+    
+    res.redirect("/thank-you")
 }
 ```
 
@@ -1583,7 +1788,7 @@ export DATABASE_URL=sqlite:./my-app.db
 
 ### Common Issues
 
-**Route not found**: Ensure the file is in `src/routes/` and exports `pub async fn page(...)`.
+**Route not found**: Ensure the file is in `src/routes/` and exports an HTTP method function like `pub async fn get(...)` or `pub async fn post(...)`.
 
 **Layout not applying**: Check that `layout.rs` is in the correct directory and exports `pub async fn layout(...)`.
 
@@ -1595,6 +1800,8 @@ export DATABASE_URL=sqlite:./my-app.db
 **Database connection errors**: Check `DATABASE_URL` in `.env` and ensure the database file exists.
 
 **Tailwind classes not working**: Run `rejoice dev` or `rejoice build` to rebuild CSS.
+
+**POST data not parsing**: Make sure you're using `req.body.as_form()` for form data or `req.body.as_json()` for JSON payloads.
 
 ---
 

@@ -46,12 +46,12 @@ src/routes/
     └── [id].rs     -> GET /users/:id
 ```
 
-Each route file exports a `page` function:
+Each route file exports an HTTP method handler like `get` or `post`:
 
 ```rust
 use rejoice::{Req, Res, html};
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     res.html(html! {
         h1 { "Hello, world!" }
     })
@@ -105,7 +105,7 @@ Access the database in your routes:
 use crate::AppState;
 use rejoice::{Req, Res, db::query_as, html};
 
-pub async fn page(state: AppState, req: Req, res: Res) -> Res {
+pub async fn get(state: AppState, req: Req, res: Res) -> Res {
     let users: Vec<(String,)> = query_as("SELECT name FROM users")
         .fetch_all(&state.db)
         .await
@@ -153,7 +153,7 @@ async fn main() {
 Then access it in routes and layouts:
 
 ```rust
-pub async fn page(state: AppState, req: Req, res: Res) -> Res {
+pub async fn get(state: AppState, req: Req, res: Res) -> Res {
     // Use state.db, state.config, etc.
     res.html(html! { /* ... */ })
 }
@@ -166,7 +166,7 @@ Add interactive components to your pages:
 ```rust
 use rejoice::{Req, Res, html, island};
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     res.html(html! {
         h1 { "My Page" }
         (island!(Counter, { initial: 0 }))
@@ -198,7 +198,7 @@ Tailwind CSS v4 is included out of the box. Just use Tailwind classes in your Ru
 ```rust
 use rejoice::{Req, Res, html};
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     res.html(html! {
         h1 class="text-4xl font-bold text-blue-600" { "Hello!" }
         p class="mt-4 text-gray-700" { "Styled with Tailwind." }

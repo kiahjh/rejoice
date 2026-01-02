@@ -16,7 +16,7 @@ Return server-rendered HTML:
 ```rust
 use rejoice::{Req, Res, html};
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     res.html(html! {
         h1 { "Hello, World!" }
     })
@@ -39,13 +39,13 @@ struct User {
     name: String,
 }
 
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     let user = User { id: 1, name: "Alice".into() };
     res.json(&user)
 }
 
 // Or with the json! macro:
-pub async fn api(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     res.json(&json!({
         "status": "ok",
         "count": 42
@@ -60,12 +60,12 @@ Returns: `200 OK` with `Content-Type: application/json`
 Redirect to another URL:
 
 ```rust
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     // Temporary redirect (302 Found)
     res.redirect("/login")
 }
 
-pub async fn moved(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     // Permanent redirect (301 Moved Permanently)
     res.redirect_permanent("/new-url")
 }
@@ -76,7 +76,7 @@ pub async fn moved(req: Req, res: Res) -> Res {
 Return raw bytes with custom content type:
 
 ```rust
-pub async fn download(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     let pdf_bytes = get_pdf_data();
     
     res.set_header("Content-Type", "application/pdf")
@@ -85,12 +85,61 @@ pub async fn download(req: Req, res: Res) -> Res {
 }
 ```
 
+## Error Helpers
+
+Convenient methods for common HTTP error responses:
+
+```rust
+// 400 Bad Request
+res.bad_request("Invalid form data")
+
+// 401 Unauthorized
+res.unauthorized("Please log in")
+
+// 403 Forbidden
+res.forbidden("Access denied")
+
+// 404 Not Found
+res.not_found("Page not found")
+
+// 500 Internal Server Error
+res.internal_error("Something went wrong")
+```
+
+Each returns an HTML response with the appropriate status code.
+
+### Example
+
+```rust
+use rejoice::{Req, Res};
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct LoginForm {
+    email: String,
+    password: String,
+}
+
+pub async fn post(req: Req, res: Res) -> Res {
+    let Ok(form) = req.body.as_form::<LoginForm>() else {
+        return res.bad_request("Invalid form data");
+    };
+    
+    if form.password.len() < 8 {
+        return res.bad_request("Password too short");
+    }
+    
+    // Process login...
+    res.redirect("/dashboard")
+}
+```
+
 ## Setting Headers
 
 Add custom headers to the response:
 
 ```rust
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     res.set_header("X-Custom-Header", "value")
        .set_header("Cache-Control", "max-age=3600")
        .html(html! { h1 { "Hello!" } })
@@ -104,12 +153,7 @@ Override the default status code:
 ```rust
 use axum::http::StatusCode;
 
-pub async fn not_found(req: Req, res: Res) -> Res {
-    res.set_status(StatusCode::NOT_FOUND)
-       .html(html! { h1 { "Page not found" } })
-}
-
-pub async fn created(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     res.set_status(StatusCode::CREATED)
        .json(&json!({ "id": 123 }))
 }
@@ -120,7 +164,7 @@ pub async fn created(req: Req, res: Res) -> Res {
 ### Simple Cookie
 
 ```rust
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     res.set_cookie("visited", "true")
        .html(html! { h1 { "Welcome!" } })
 }
@@ -129,7 +173,7 @@ pub async fn page(req: Req, res: Res) -> Res {
 ### Cookie with Options
 
 ```rust
-pub async fn login(req: Req, res: Res) -> Res {
+pub async fn post(req: Req, res: Res) -> Res {
     res.set_cookie_with_options(
         "session_id",           // name
         "abc123",               // value
@@ -146,7 +190,7 @@ pub async fn login(req: Req, res: Res) -> Res {
 ### Delete Cookie
 
 ```rust
-pub async fn logout(req: Req, res: Res) -> Res {
+pub async fn post(req: Req, res: Res) -> Res {
     res.delete_cookie("session_id")
        .redirect("/")
 }
@@ -157,7 +201,7 @@ pub async fn logout(req: Req, res: Res) -> Res {
 All `set_*` methods return `&Res` and can be chained:
 
 ```rust
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     res.set_cookie("last_visit", "2025-01-01")
        .set_header("X-Frame-Options", "DENY")
        .set_header("Cache-Control", "no-cache")
@@ -170,7 +214,7 @@ pub async fn page(req: Req, res: Res) -> Res {
 Cookies set on `res` apply to all subsequent responses:
 
 ```rust
-pub async fn page(req: Req, res: Res) -> Res {
+pub async fn get(req: Req, res: Res) -> Res {
     // This cookie is set regardless of which branch executes
     res.set_cookie("last_visit", "2025-01-01");
     
