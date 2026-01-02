@@ -165,7 +165,7 @@ The `Res` type uses interior mutability for building responses.
 - `set_header(name, value)` - Set a response header
 - `set_status(StatusCode)` - Override status code
 
-**Finalizers** (consume `Res`, return `Res`):
+**Finalizers** (take `&self`, return owned `Res` - chainable from mutators):
 - `html(Markup)` - HTML response (200, text/html)
 - `json(&impl Serialize)` - JSON response (200, application/json)
 - `redirect(url)` - 302 redirect
@@ -255,7 +255,7 @@ rejoice = { version = "...", features = ["sqlite"] }
 
 Exports in `src/db.rs` (only available with `sqlite` feature):
 - `Pool`, `Sqlite` - sqlx types
-- `query`, `query_as` - sqlx query functions/macros
+- `query`, `query_as`, `query_scalar` - sqlx query functions/macros
 - `FromRow` - Derive macro for mapping query results to structs
 - `PoolConfig`, `create_pool` - Pool creation helpers
 

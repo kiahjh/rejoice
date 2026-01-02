@@ -57,7 +57,7 @@ async fn main() {
 ## Queries
 
 ```rust
-use rejoice::{Req, Res, html, db::{query, query_as, FromRow}};
+use rejoice::{Req, Res, html, db::{query, query_as, query_scalar, FromRow}};
 
 #[derive(FromRow)]
 struct User { id: i32, name: String }
@@ -73,6 +73,12 @@ pub async fn get(state: AppState, req: Req, res: Res) -> Res {
     let user: Option<User> = query_as("SELECT * FROM users WHERE id = ?")
         .bind(123)
         .fetch_optional(&state.db)
+        .await
+        .unwrap();
+    
+    // Scalar query (for COUNT, MAX, single values)
+    let count: i32 = query_scalar("SELECT COUNT(*) FROM users")
+        .fetch_one(&state.db)
         .await
         .unwrap();
     

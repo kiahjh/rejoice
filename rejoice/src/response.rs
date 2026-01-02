@@ -135,49 +135,49 @@ impl Res {
     }
 
     /// Finalize as an HTML response
-    pub fn html(self, markup: Markup) -> Self {
+    pub fn html(&self, markup: Markup) -> Self {
         self.inner.borrow_mut().body = Some(ResBody::Html(markup.into_string()));
         if self.inner.borrow().status.is_none() {
             self.inner.borrow_mut().status = Some(StatusCode::OK);
         }
-        self
+        self.clone()
     }
 
     /// Finalize as a JSON response
-    pub fn json<T: Serialize>(self, data: &T) -> Self {
+    pub fn json<T: Serialize>(&self, data: &T) -> Self {
         let json_string = serde_json::to_string(data).unwrap_or_else(|_| "null".to_string());
         self.inner.borrow_mut().body = Some(ResBody::Json(json_string));
         if self.inner.borrow().status.is_none() {
             self.inner.borrow_mut().status = Some(StatusCode::OK);
         }
-        self
+        self.clone()
     }
 
     /// Finalize as a redirect (302 Found)
-    pub fn redirect(self, url: impl Into<String>) -> Self {
+    pub fn redirect(&self, url: impl Into<String>) -> Self {
         self.inner.borrow_mut().body = Some(ResBody::Redirect(url.into(), false));
-        self
+        self.clone()
     }
 
     /// Finalize as a permanent redirect (301 Moved Permanently)
-    pub fn redirect_permanent(self, url: impl Into<String>) -> Self {
+    pub fn redirect_permanent(&self, url: impl Into<String>) -> Self {
         self.inner.borrow_mut().body = Some(ResBody::Redirect(url.into(), true));
-        self
+        self.clone()
     }
 
     /// Finalize as a raw byte response
-    pub fn raw(self, body: impl Into<Vec<u8>>) -> Self {
+    pub fn raw(&self, body: impl Into<Vec<u8>>) -> Self {
         self.inner.borrow_mut().body = Some(ResBody::Raw(body.into()));
         if self.inner.borrow().status.is_none() {
             self.inner.borrow_mut().status = Some(StatusCode::OK);
         }
-        self
+        self.clone()
     }
 
     // === Error Response Helpers ===
 
     /// Return a 400 Bad Request response with HTML message
-    pub fn bad_request(self, message: &str) -> Self {
+    pub fn bad_request(&self, message: &str) -> Self {
         self.inner.borrow_mut().status = Some(StatusCode::BAD_REQUEST);
         self.html(maud::html! {
             h1 { "Bad Request" }
@@ -186,7 +186,7 @@ impl Res {
     }
 
     /// Return a 401 Unauthorized response with HTML message
-    pub fn unauthorized(self, message: &str) -> Self {
+    pub fn unauthorized(&self, message: &str) -> Self {
         self.inner.borrow_mut().status = Some(StatusCode::UNAUTHORIZED);
         self.html(maud::html! {
             h1 { "Unauthorized" }
@@ -195,7 +195,7 @@ impl Res {
     }
 
     /// Return a 403 Forbidden response with HTML message
-    pub fn forbidden(self, message: &str) -> Self {
+    pub fn forbidden(&self, message: &str) -> Self {
         self.inner.borrow_mut().status = Some(StatusCode::FORBIDDEN);
         self.html(maud::html! {
             h1 { "Forbidden" }
@@ -204,7 +204,7 @@ impl Res {
     }
 
     /// Return a 404 Not Found response with HTML message
-    pub fn not_found(self, message: &str) -> Self {
+    pub fn not_found(&self, message: &str) -> Self {
         self.inner.borrow_mut().status = Some(StatusCode::NOT_FOUND);
         self.html(maud::html! {
             h1 { "Not Found" }
@@ -213,7 +213,7 @@ impl Res {
     }
 
     /// Return a 500 Internal Server Error response with HTML message
-    pub fn internal_error(self, message: &str) -> Self {
+    pub fn internal_error(&self, message: &str) -> Self {
         self.inner.borrow_mut().status = Some(StatusCode::INTERNAL_SERVER_ERROR);
         self.html(maud::html! {
             h1 { "Internal Server Error" }

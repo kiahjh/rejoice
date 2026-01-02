@@ -503,7 +503,7 @@ res.delete_cookie("session_id");
 
 ### Finalizer Methods
 
-Finalizers consume the `Res` and return the final response:
+Finalizers take `&self` and return an owned `Res`, allowing them to chain from mutators:
 
 #### HTML Response
 
@@ -1010,6 +1010,7 @@ The `rejoice::db` module exports:
 - `Sqlite` - Database driver type
 - `query` - Raw query function
 - `query_as` - Typed query function
+- `query_scalar` - Scalar query function (for COUNT, MAX, single values)
 - `FromRow` - Derive macro for mapping query results to structs
 - `PoolConfig` - Pool configuration struct
 - `create_pool` - Pool creation function
@@ -1342,6 +1343,7 @@ use rejoice::db::{
     Sqlite,          // SQLite driver type
     query,           // Raw SQL query
     query_as,        // Typed SQL query
+    query_scalar,    // Scalar SQL query (COUNT, MAX, etc.)
     FromRow,         // Derive macro for result mapping
     PoolConfig,      // Pool configuration
     create_pool,     // Pool creation function

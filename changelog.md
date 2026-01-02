@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.1
+
+- Added `query_scalar` to database exports for COUNT, MAX, and other single-value queries
+- Fixed `Res` chaining: finalizer methods (`html`, `json`, `redirect`, etc.) now take `&self` instead of `self`, allowing patterns like `res.delete_cookie("x").redirect("/y")`
+
 ## 0.11.0
 
 - Added support for other http methods (GET, POST, PUT, DELETE, PATCH) and body parsing
