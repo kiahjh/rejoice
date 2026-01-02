@@ -465,7 +465,6 @@ req.body.as_json::<T>() -> Result<T, BodyParseError>
 // Parse as form data (application/x-www-form-urlencoded)
 req.body.as_form::<T>() -> Result<T, BodyParseError>
 ```
-```
 
 ---
 
@@ -613,7 +612,6 @@ pub async fn get(req: Req, res: Res) -> Res {
 ```
 
 Each error helper returns an HTML response with the status code and message.
-```
 
 ### Chaining Example
 
@@ -657,11 +655,13 @@ Rejoice uses [Maud](https://maud.lambda.xyz/) for compile-time HTML templating.
 
 ### Basic Syntax
 
-```rust
-use rejoice::{html, Markup, DOCTYPE};
+The `html!` macro creates a `Markup` value that you pass to `res.html()`:
 
-fn render_page() -> Markup {
-    html! {
+```rust
+use rejoice::{Req, Res, html, DOCTYPE};
+
+pub async fn get(req: Req, res: Res) -> Res {
+    res.html(html! {
         (DOCTYPE)
         html {
             head {
@@ -672,7 +672,7 @@ fn render_page() -> Markup {
                 p { "Welcome to my site." }
             }
         }
-    }
+    })
 }
 ```
 
@@ -770,11 +770,14 @@ html! {
 }
 ```
 
-### Components (Functions)
+### Components (Helper Functions)
+
+Create reusable HTML components as functions that return `Markup`. These are helper functions, not route handlers - you call them within your route's `html!` block:
 
 ```rust
-use rejoice::{html, Markup};
+use rejoice::{Req, Res, html, Markup};
 
+// Reusable component function
 fn card(title: &str, content: &str) -> Markup {
     html! {
         div class="card" {
@@ -784,11 +787,13 @@ fn card(title: &str, content: &str) -> Markup {
     }
 }
 
-fn page() -> Markup {
-    html! {
+// Route handler that uses the component
+pub async fn get(req: Req, res: Res) -> Res {
+    res.html(html! {
+        h1 { "Our Services" }
         (card("Welcome", "Hello, world!"))
         (card("About", "Learn more about us."))
-    }
+    })
 }
 ```
 
@@ -1297,8 +1302,10 @@ let app = App::new(port, create_router());
 use rejoice::{
     // Core types
     App,             // Server/application struct
-    Req,             // Request data
+    Req,             // Request data (headers, cookies, method, uri, body)
     Res,             // Response builder
+    Body,            // Request body type (access via req.body)
+    BodyParseError,  // Error type for body parsing failures
     Children,        // Layout children type (alias for Markup)
     Path,            // Axum path extractor for dynamic routes
     

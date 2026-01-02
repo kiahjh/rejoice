@@ -10,20 +10,6 @@ rejoice build --release
 
 This creates an optimized binary and compiled assets.
 
-## Required Files
-
-Your deployment needs these files:
-
-```text
-my-app/
-├── target/release/my-app   # The compiled binary
-├── dist/                   # Built client assets
-│   ├── islands.js
-│   └── styles.css
-├── public/                 # Static files
-└── .env                    # Environment variables (if using database)
-```
-
 ## Running the Binary
 
 The binary must run from the project root (where `dist/` and `public/` exist):

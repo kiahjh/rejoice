@@ -48,23 +48,6 @@ Client assets (JavaScript, CSS) are output to `dist/` and served automatically:
 
 You don't need to reference these manually—they're injected into all HTML responses.
 
-## Common Static Files
-
-Typical `public/` contents:
-
-```text
-public/
-├── favicon.ico
-├── robots.txt
-├── sitemap.xml
-├── images/
-│   ├── logo.png
-│   └── og-image.jpg
-└── fonts/
-    ├── inter.woff2
-    └── fonts.css
-```
-
 ## Custom Fonts
 
 Add custom fonts to `public/fonts/`:
@@ -97,17 +80,6 @@ html! {
 ## Development
 
 During `rejoice dev`, the `public/` directory is watched. Changes to static files trigger a browser reload.
-
-## Production
-
-In production, include the `public/` directory alongside your binary:
-
-```text
-my-app/
-├── my-app          # Binary
-├── dist/           # Built client assets
-└── public/         # Static files
-```
 
 ## Next Steps
 

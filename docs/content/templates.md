@@ -58,9 +58,11 @@ html! {
 
 ## Components
 
-Create reusable components as functions:
+Create reusable components as helper functions that return `Markup`:
 
 ```rust
+use rejoice::{Req, Res, html, Markup};
+
 fn card(title: &str, content: &str) -> Markup {
     html! {
         div class="card" {
@@ -70,8 +72,11 @@ fn card(title: &str, content: &str) -> Markup {
     }
 }
 
-html! {
-    (card("Welcome", "Hello!"))
+pub async fn get(req: Req, res: Res) -> Res {
+    res.html(html! {
+        (card("Welcome", "Hello!"))
+        (card("About", "Learn more."))
+    })
 }
 ```
 
