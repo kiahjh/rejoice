@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.3
+
+- Improved error messages when `npm install` fails during `rejoice dev`
+
 ## 0.11.2
 
 - Fixed Windows compatibility: route codegen now uses forward slashes in `#[path]` attributes

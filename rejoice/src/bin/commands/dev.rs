@@ -68,9 +68,21 @@ fn setup_client_build() {
             .stderr(Stdio::inherit())
             .status();
 
-        if status.is_err() || !status.unwrap().success() {
-            style::print_error("Failed to run npm install");
-            std::process::exit(1);
+        match status {
+            Err(e) => {
+                style::print_error(&format!("Failed to run npm install: {}", e));
+                std::process::exit(1);
+            }
+            Ok(s) if !s.success() => {
+                style::print_error(&format!(
+                    "npm install failed with exit code {}",
+                    s.code()
+                        .map(|c| c.to_string())
+                        .unwrap_or_else(|| "unknown".to_string())
+                ));
+                std::process::exit(1);
+            }
+            Ok(_) => {}
         }
         println!();
     }
