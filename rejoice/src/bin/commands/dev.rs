@@ -14,6 +14,30 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
 
+fn run_npm_command(args: &[&str]) -> std::io::Result<std::process::ExitStatus> {
+    // Run npm through a shell to ensure proper PATH resolution
+    // This handles cases where npm is installed via nvm or in user-specific locations
+    #[cfg(not(windows))]
+    {
+        let npm_cmd = format!("npm {}", args.join(" "));
+        Command::new("sh")
+            .args(["-c", &npm_cmd])
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status()
+    }
+
+    #[cfg(windows)]
+    {
+        let npm_cmd = format!("npm {}", args.join(" "));
+        Command::new("cmd")
+            .args(["/C", &npm_cmd])
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status()
+    }
+}
+
 pub fn dev_command() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(run_dev_server());
@@ -62,11 +86,7 @@ fn setup_client_build() {
             "→".blue().bold(),
             "Installing npm dependencies...".white()
         );
-        let status = Command::new("npm")
-            .args(["install"])
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .status();
+        let status = run_npm_command(&["install"]);
 
         match status {
             Err(e) => {
@@ -271,11 +291,24 @@ fn handle_rust_change(
 }
 
 fn run_vite_build() {
-    let _ = Command::new("npm")
-        .args(["run", "build"])
-        .stdout(Stdio::null())
-        .stderr(Stdio::inherit())
-        .status();
+    // Run npm build through shell for proper PATH resolution
+    #[cfg(not(windows))]
+    {
+        let _ = Command::new("sh")
+            .args(["-c", "npm run build"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::inherit())
+            .status();
+    }
+
+    #[cfg(windows)]
+    {
+        let _ = Command::new("cmd")
+            .args(["/C", "npm run build"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::inherit())
+            .status();
+    }
 }
 
 fn start_app() -> Child {

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.4
+
+- Fixed npm PATH resolution issues - now runs npm commands through shell to properly detect npm installed via nvm or custom locations
+
 ## 0.11.3
 
 - Improved error messages when `npm install` fails during `rejoice dev`

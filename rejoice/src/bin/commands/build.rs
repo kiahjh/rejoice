@@ -4,6 +4,30 @@ use colored::Colorize;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+fn run_npm_command(args: &[&str]) -> std::io::Result<std::process::ExitStatus> {
+    // Run npm through a shell to ensure proper PATH resolution
+    // This handles cases where npm is installed via nvm or in user-specific locations
+    #[cfg(not(windows))]
+    {
+        let npm_cmd = format!("npm {}", args.join(" "));
+        Command::new("sh")
+            .args(["-c", &npm_cmd])
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status()
+    }
+
+    #[cfg(windows)]
+    {
+        let npm_cmd = format!("npm {}", args.join(" "));
+        Command::new("cmd")
+            .args(["/C", &npm_cmd])
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status()
+    }
+}
+
 pub fn build_command(release: bool) {
     style::print_banner();
 
@@ -31,11 +55,7 @@ pub fn build_command(release: bool) {
     if has_client {
         if !Path::new("node_modules").exists() {
             style::print_step(step, total_steps, "Installing npm dependencies...");
-            let status = Command::new("npm")
-                .args(["install"])
-                .stdout(Stdio::inherit())
-                .stderr(Stdio::inherit())
-                .status();
+            let status = run_npm_command(&["install"]);
 
             if status.is_err() || !status.unwrap().success() {
                 style::print_error("Failed to run npm install");
@@ -58,8 +78,18 @@ pub fn build_command(release: bool) {
 
         // Step 3 (or 2): Build client assets with Vite
         style::print_step(step, total_steps, "Building client assets...");
-        let vite_status = Command::new("npm")
-            .args(["run", "build"])
+
+        // Run npm build through shell for proper PATH resolution
+        #[cfg(not(windows))]
+        let vite_status = Command::new("sh")
+            .args(["-c", "npm run build"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::inherit())
+            .status();
+
+        #[cfg(windows)]
+        let vite_status = Command::new("cmd")
+            .args(["/C", "npm run build"])
             .stdout(Stdio::null())
             .stderr(Stdio::inherit())
             .status();
