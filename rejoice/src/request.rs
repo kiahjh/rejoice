@@ -159,9 +159,12 @@ where
 {
     type Rejection = std::convert::Infallible;
 
-    async fn from_request(req: Request<axum::body::Body>, _state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request(
+        req: Request<axum::body::Body>,
+        _state: &S,
+    ) -> Result<Self, Self::Rejection> {
         let (parts, body) = req.into_parts();
-        
+
         let headers = parts.headers;
         let cookies = Cookies::from_header(
             headers
@@ -170,7 +173,7 @@ where
         );
         let method = parts.method;
         let uri = parts.uri;
-        
+
         // Read the body bytes
         let bytes = axum::body::to_bytes(body, usize::MAX)
             .await

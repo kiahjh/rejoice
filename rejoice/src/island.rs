@@ -1,7 +1,7 @@
 use maud::{Markup, PreEscaped};
 
 /// Renders an island placeholder that will be hydrated on the client.
-/// 
+///
 /// # Example
 /// ```rust
 /// use rejoice::{html, island, Markup};
@@ -33,5 +33,3 @@ pub fn island_fn(name: &str, props: serde_json::Value) -> Markup {
         name, escaped_props
     ))
 }
-
-

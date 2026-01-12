@@ -29,7 +29,7 @@ pub use axum::{Router, routing};
 pub use island::island_fn;
 
 // HTML/Maud - flattened to root level
-pub use maud::{html, Markup, DOCTYPE, PreEscaped};
+pub use maud::{DOCTYPE, Markup, PreEscaped, html};
 
 // JSON
 pub use serde_json::json;
@@ -79,8 +79,6 @@ macro_rules! routes {
 /// ```
 pub mod prelude {
     pub use crate::{
-        html, island, json, App, Children, Markup, Path, PreEscaped, Req, Res, DOCTYPE,
+        App, Children, DOCTYPE, Markup, Path, PreEscaped, Req, Res, html, island, json,
     };
 }
-
-

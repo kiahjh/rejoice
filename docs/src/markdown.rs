@@ -1,5 +1,5 @@
-use pulldown_cmark::{html, Event, Options, Parser, Tag, TagEnd};
-use rejoice::{html as maud_html, Markup, PreEscaped};
+use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd, html};
+use rejoice::{Markup, PreEscaped, html as maud_html};
 
 /// Renders markdown to HTML Markup, with special handling for code blocks.
 pub fn render_markdown(content: &str) -> Markup {

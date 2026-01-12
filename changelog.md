@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.2
+
+- Fixed Windows compatibility: route codegen now uses forward slashes in `#[path]` attributes
+
 ## 0.11.1
 
 - Added `query_scalar` to database exports for COUNT, MAX, and other single-value queries

@@ -1,7 +1,7 @@
 use axum::{
     body::Body,
     extract::FromRequestParts,
-    http::{header, request::Parts, HeaderName, HeaderValue, StatusCode},
+    http::{HeaderName, HeaderValue, StatusCode, header, request::Parts},
     response::IntoResponse,
 };
 use maud::Markup;
@@ -79,11 +79,10 @@ impl Res {
 
     /// Set a cookie on the response
     pub fn set_cookie(&self, name: impl Into<String>, value: impl Into<String>) -> &Self {
-        self.inner.borrow_mut().cookies.push((
-            name.into(),
-            value.into(),
-            CookieOptions::default(),
-        ));
+        self.inner
+            .borrow_mut()
+            .cookies
+            .push((name.into(), value.into(), CookieOptions::default()));
         self
     }
 
@@ -342,11 +341,7 @@ impl IntoResponse for Res {
                 None,
                 Body::from(bytes),
             ),
-            None => (
-                inner.status.unwrap_or(StatusCode::OK),
-                None,
-                Body::empty(),
-            ),
+            None => (inner.status.unwrap_or(StatusCode::OK), None, Body::empty()),
         };
 
         let mut response = axum::response::Response::builder()

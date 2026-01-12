@@ -237,11 +237,7 @@ fn get_layout_chain(route: &RouteInfo, layouts: &HashMap<String, String>) -> Opt
         }
     }
 
-    if chain.is_empty() {
-        None
-    } else {
-        Some(chain)
-    }
+    if chain.is_empty() { None } else { Some(chain) }
 }
 
 fn generate_wrapper_handler(
@@ -370,7 +366,13 @@ fn generate_routes_mod(base_dir: &Path, dir: &Path, mod_prefix: &str, output: &m
             };
 
             let rel_path = path.strip_prefix(base_dir).unwrap();
-            output.push_str(&format!("#[path = \"routes/{}\"]\n", rel_path.display()));
+            // Use forward slashes for #[path] attribute (works on all platforms)
+            let rel_path_str = rel_path
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy())
+                .collect::<Vec<_>>()
+                .join("/");
+            output.push_str(&format!("#[path = \"routes/{}\"]\n", rel_path_str));
             output.push_str(&format!("pub mod {};\n", full_mod_name));
         }
     }

@@ -8,10 +8,7 @@ pub fn build_command(release: bool) {
     style::print_banner();
 
     let mode = if release { "release" } else { "debug" };
-    println!(
-        "\n  {}\n",
-        format!("Building for {}...", mode).dimmed()
-    );
+    println!("\n  {}\n", format!("Building for {}...", mode).dimmed());
 
     let client_dir = Path::new("client");
     let has_client = client_dir.exists();

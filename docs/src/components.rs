@@ -1,4 +1,4 @@
-use rejoice::{html, Markup};
+use rejoice::{Markup, html};
 
 pub fn logo(size: &str) -> Markup {
     html! {
