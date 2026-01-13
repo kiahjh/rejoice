@@ -1,9 +1,11 @@
 use axum::{
-    Router,
+    Json, Router,
     body::Body,
     http::{Request, Response, header},
+    routing::get,
 };
 use colored::Colorize;
+use serde::Serialize;
 use std::path::Path;
 use std::task::{Context, Poll};
 use tower::{Layer, Service, ServiceBuilder};
@@ -26,6 +28,7 @@ impl App {
         state: S,
     ) -> Self {
         let dev_mode = std::env::var("REJOICE_DEV").is_ok();
+        let studio_mode = std::env::var("REJOICE_STUDIO").is_ok();
         let has_islands = Path::new("dist/islands.js").exists();
         let has_styles = Path::new("dist/styles.css").exists();
 
@@ -43,6 +46,16 @@ impl App {
             router = router.fallback_service(ServeDir::new(public_dir));
         }
 
+        // Add Studio endpoints in dev mode
+        if dev_mode {
+            router = router.route("/__studio/registry", get(studio_registry_handler));
+        }
+
+        // Add Studio host page when in studio mode
+        if studio_mode {
+            router = router.route("/__studio", get(studio_host_handler));
+        }
+
         router = router.layer(
             ServiceBuilder::new().layer(
                 CorsLayer::new()
@@ -55,6 +68,7 @@ impl App {
         // Add script/style injection middleware
         router = router.layer(ScriptInjectionLayer {
             dev_mode,
+            studio_mode,
             has_islands,
             has_styles,
         });
@@ -86,11 +100,95 @@ impl App {
     }
 }
 
+// Studio registry endpoint handler
+
+/// JSON-serializable version of PropMeta
+#[derive(Serialize)]
+struct PropMetaJson {
+    name: &'static str,
+    ty: &'static str,
+    required: bool,
+    default: Option<&'static str>,
+    doc: Option<&'static str>,
+}
+
+/// JSON-serializable version of ComponentMeta
+#[derive(Serialize)]
+struct ComponentMetaJson {
+    name: &'static str,
+    file: &'static str,
+    line: u32,
+    column: u32,
+    doc: Option<&'static str>,
+    props: Vec<PropMetaJson>,
+}
+
+/// Response for the registry endpoint
+#[derive(Serialize)]
+struct RegistryResponse {
+    components: Vec<ComponentMetaJson>,
+}
+
+async fn studio_host_handler() -> axum::response::Html<String> {
+    let html = format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Rejoice Studio</title>
+</head>
+<body>
+    <script>{}</script>
+</body>
+</html>"#,
+        STUDIO_HOST_SCRIPT
+    );
+    axum::response::Html(html)
+}
+
+async fn studio_registry_handler() -> Json<RegistryResponse> {
+    let components = crate::studio::get_all_components();
+    let json_components: Vec<ComponentMetaJson> = components
+        .into_iter()
+        .map(|c| ComponentMetaJson {
+            name: c.name,
+            file: c.file,
+            line: c.line,
+            column: c.column,
+            doc: c.doc,
+            props: c
+                .props
+                .iter()
+                .map(|p| PropMetaJson {
+                    name: p.name,
+                    ty: p.ty,
+                    required: p.required,
+                    default: p.default,
+                    doc: p.doc,
+                })
+                .collect(),
+        })
+        .collect();
+
+    Json(RegistryResponse {
+        components: json_components,
+    })
+}
+
 const LIVE_RELOAD_SCRIPT: &str = concat!(
     "<script>",
     include_str!("assets/live_reload.js"),
     "</script>"
 );
+
+const STUDIO_BRIDGE_SCRIPT: &str = concat!(
+    "<script>",
+    include_str!("assets/studio/studio-bridge.js"),
+    "</script>"
+);
+
+const STUDIO_HOST_SCRIPT: &str = include_str!("assets/studio/studio-host.js");
 
 const ISLAND_SCRIPT: &str = r#"<script type="module" src="/static/islands.js"></script>"#;
 const STYLES_LINK: &str = r#"<link rel="stylesheet" href="/static/styles.css">"#;
@@ -98,6 +196,7 @@ const STYLES_LINK: &str = r#"<link rel="stylesheet" href="/static/styles.css">"#
 #[derive(Clone)]
 pub struct ScriptInjectionLayer {
     dev_mode: bool,
+    studio_mode: bool,
     has_islands: bool,
     has_styles: bool,
 }
@@ -109,6 +208,7 @@ impl<S> Layer<S> for ScriptInjectionLayer {
         ScriptInjectionMiddleware {
             inner,
             dev_mode: self.dev_mode,
+            studio_mode: self.studio_mode,
             has_islands: self.has_islands,
             has_styles: self.has_styles,
         }
@@ -119,6 +219,7 @@ impl<S> Layer<S> for ScriptInjectionLayer {
 pub struct ScriptInjectionMiddleware<S> {
     inner: S,
     dev_mode: bool,
+    studio_mode: bool,
     has_islands: bool,
     has_styles: bool,
 }
@@ -141,8 +242,16 @@ where
     fn call(&mut self, req: Request<Body>) -> Self::Future {
         let mut inner = self.inner.clone();
         let dev_mode = self.dev_mode;
+        let studio_mode = self.studio_mode;
         let has_islands = self.has_islands;
         let has_styles = self.has_styles;
+
+        // Check if this request has __studio_bridge query param
+        let inject_bridge = req
+            .uri()
+            .query()
+            .map(|q| q.contains("__studio_bridge"))
+            .unwrap_or(false);
 
         Box::pin(async move {
             let response = inner.call(req).await?;
@@ -166,6 +275,10 @@ where
             }
             if dev_mode {
                 scripts.push_str(LIVE_RELOAD_SCRIPT);
+            }
+            // Inject bridge script when inside studio iframe
+            if studio_mode && inject_bridge {
+                scripts.push_str(STUDIO_BRIDGE_SCRIPT);
             }
 
             // Build the styles to inject in <head>

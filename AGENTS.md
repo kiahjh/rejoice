@@ -2,28 +2,62 @@
 
 This document provides technical context for AI coding agents working on the Rejoice framework.
 
+## Implementation Approach
+
+Before writing code for any non-trivial feature, **think through the implementation carefully**:
+
+1. **Understand the existing patterns** - Read relevant existing code to understand conventions, error handling patterns, and how similar features are implemented.
+
+2. **Consider the architecture** - Ask yourself:
+   - Where does this code belong? (which crate, which module)
+   - What are the dependencies? (will this create circular dependencies?)
+   - How will this interact with existing systems?
+   - What's the data flow?
+
+3. **Identify edge cases early** - Think about:
+   - Error conditions and how to handle them
+   - Debug vs release behavior differences
+   - Platform-specific concerns
+   - Backward compatibility
+
+4. **Plan the implementation order** - Break complex features into steps that can be tested incrementally. Each step should leave the codebase in a working state.
+
+5. **Consider testing strategy** - Before writing code, think about how you'll verify it works. This often reveals design issues early.
+
+When in doubt, write out the plan and check with the user before proceeding. It's faster to course-correct a plan than to refactor completed code.
+
 ## Project Structure
 
+This is a Cargo workspace with multiple crates:
+
 ```
-src/
-├── bin/
-│   ├── main.rs              # CLI entry point (uses clap)
-│   └── commands/
-│       ├── mod.rs           # Command exports
-│       ├── init.rs          # `rejoice init` - project scaffolding
-│       ├── dev.rs           # `rejoice dev` - dev server with HMR
-│       ├── islands.rs       # Generates client/islands.tsx registry
-│       └── style.rs         # Terminal output helpers
-├── assets/
-│   └── live_reload.js       # Client-side HMR script (injected into HTML)
-├── app.rs                   # App struct, middleware, server setup
-├── codegen.rs               # Build-time route generation
-├── db.rs                    # SQLite pool config and exports
-├── env.rs                   # Re-exports dotenvy_macro::dotenv as env!
-├── island.rs                # Island macro for SolidJS components
-├── request.rs               # Req type for incoming request data
-├── response.rs              # Res type for building responses
-└── lib.rs                   # Public API exports
+rejoice/                     # Workspace root
+├── Cargo.toml               # Workspace definition
+├── rejoice/                  # Main framework crate
+│   └── src/
+│       ├── bin/
+│       │   ├── main.rs              # CLI entry point (uses clap)
+│       │   └── commands/
+│       │       ├── mod.rs           # Command exports
+│       │       ├── init.rs          # `rejoice init` - project scaffolding
+│       │       ├── dev.rs           # `rejoice dev` - dev server with HMR
+│       │       ├── build.rs         # `rejoice build` - production builds
+│       │       ├── islands.rs       # Generates client/islands.tsx registry
+│       │       └── style.rs         # Terminal output helpers
+│       ├── assets/
+│       │   └── live_reload.js       # Client-side HMR script (injected into HTML)
+│       ├── app.rs                   # App struct, middleware, server setup
+│       ├── codegen.rs               # Build-time route generation
+│       ├── db.rs                    # SQLite pool config and exports
+│       ├── env.rs                   # Re-exports dotenvy_macro::dotenv as env!
+│       ├── island.rs                # Island macro for SolidJS components
+│       ├── request.rs               # Req type for incoming request data
+│       ├── response.rs              # Res type for building responses
+│       └── lib.rs                   # Public API exports
+├── rejoice-macros/           # Proc macro crate
+│   └── src/
+│       └── lib.rs                   # #[component], #[derive(PropEnum)] macros
+└── docs/                     # Documentation website (built with Rejoice)
 ```
 
 ## CLI Commands
@@ -366,6 +400,55 @@ use rejoice::prelude::*;
 
 **IMPORTANT:** All dependencies in `Cargo.toml` must use exact versions (e.g., `"1.0.148"` not `"1"`). When adding or updating dependencies, always pin to a specific patch version.
 
+## Testing
+
+### Running Tests
+
+```bash
+# Run all tests in the workspace
+cargo test
+
+# Run tests for a specific crate
+cargo test -p rejoice
+cargo test -p rejoice-macros
+
+# Run tests with output
+cargo test -- --nocapture
+
+# Run a specific test
+cargo test test_name
+```
+
+### Testing Guidelines
+
+1. **Add tests when implementing new features** - Every new feature should have tests covering:
+   - Happy path (normal usage)
+   - Edge cases (empty inputs, special characters, etc.)
+   - Error cases (invalid inputs, expected failures)
+
+2. **Add tests when fixing bugs** - Before fixing a bug, write a test that reproduces it. This prevents regression.
+
+3. **Proc macro testing** - For `rejoice-macros`, use `trybuild` for compile-fail tests and regular unit tests for success cases. Test:
+   - Valid macro usage compiles correctly
+   - Invalid usage produces helpful error messages
+   - Generated code behaves as expected
+
+4. **Integration tests** - For end-to-end behavior, consider tests that:
+   - Start the dev server
+   - Make HTTP requests
+   - Verify responses
+
+5. **Test file location**:
+   - Unit tests: In the same file as the code, in a `#[cfg(test)]` module
+   - Integration tests: In `tests/` directory at crate root
+   - Proc macro compile tests: In `tests/` using `trybuild`
+
+### Test Coverage Goals
+
+- All public API functions should have tests
+- All macro variants should have tests
+- Error paths should be tested, not just success paths
+
 ## Maintenance Checklist
 
 When modifying the framework:
@@ -379,3 +462,4 @@ When modifying the framework:
 7. **ANY change to the framework** → Update `LLM_DOCS.md` to reflect the change. This file is the comprehensive user-facing documentation for AI agents building apps with Rejoice. It MUST stay perfectly in sync with the actual framework behavior. When in doubt, update it.
 8. **ANY change to the framework** → Update `/docs` to reflect the change. This is the documentation website for Rejoice, and MUST stay perfectly in sync with the actual framework behavior. When in doubt, update it.
 9. **ANY change to the framework** → Update `README.md` if the change affects user-facing features, API usage examples, or getting started instructions. The README is the first thing users see, so it must accurately reflect how the framework works.
+10. **ANY new feature** → Add tests covering happy path, edge cases, and error cases

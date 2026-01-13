@@ -1,5 +1,5 @@
-use crate::components::logo;
-use rejoice::{html, island, Children, Req, Res};
+use crate::components::{Logo, SidebarSection, VersionBadge};
+use rejoice::{Children, Req, Res, html, island};
 
 pub async fn layout(req: Req, res: Res, children: Children) -> Res {
     let current_path = req.uri.path();
@@ -21,12 +21,9 @@ pub async fn layout(req: Req, res: Res, children: Children) -> Res {
                         }
                     }
                     a href="/" class="text-2xl flex items-center gap-1" {
-                        (logo("w-7 h-7"))
+                        (Logo::new("w-7 h-7"))
                         span class="hero-title-accent mr-1" { "Rejoice" }
-                        span class="text-xs font-medium px-2 py-0.5 rounded-full"
-                            style="background: var(--ember-whisper); color: var(--ember-bright); border: 1px solid var(--line);" {
-                            "v" (env!("CARGO_PKG_VERSION"))
-                        }
+                        (VersionBadge::new(env!("CARGO_PKG_VERSION")))
                     }
                 }
                 div class="flex items-center gap-6" {
@@ -87,66 +84,33 @@ pub async fn layout(req: Req, res: Res, children: Children) -> Res {
 
 fn sidebar_content(current_path: &str) -> rejoice::Markup {
     html! {
-        (sidebar_section("Getting Started", &[
+        (SidebarSection::new("Getting Started", &[
             ("/docs", "Introduction"),
             ("/docs/installation", "Installation"),
             ("/docs/project-structure", "Project Structure"),
         ], current_path))
 
-        (sidebar_section("Core Concepts", &[
+        (SidebarSection::new("Core Concepts", &[
             ("/docs/routing", "Routing"),
             ("/docs/layouts", "Layouts"),
             ("/docs/templates", "HTML Templates"),
         ], current_path))
 
-        (sidebar_section("Request & Response", &[
+        (SidebarSection::new("Request & Response", &[
             ("/docs/request", "Request Object"),
             ("/docs/response", "Response Object"),
         ], current_path))
 
-        (sidebar_section("Features", &[
+        (SidebarSection::new("Features", &[
             ("/docs/islands", "SolidJS Islands"),
             ("/docs/tailwind", "Tailwind CSS"),
             ("/docs/database", "Database"),
             ("/docs/static-assets", "Static Assets"),
         ], current_path))
 
-        (sidebar_section("Reference", &[
+        (SidebarSection::new("Reference", &[
             ("/docs/cli", "CLI Commands"),
             ("/docs/deployment", "Deployment"),
         ], current_path))
-    }
-}
-
-fn sidebar_section(title: &str, links: &[(&str, &str)], current_path: &str) -> rejoice::Markup {
-    html! {
-        div class="mb-8" {
-            h3 class="text-xs font-medium uppercase tracking-widest mb-4 px-3" style="color: var(--ink-ghost);" {
-                (title)
-            }
-            ul class="space-y-1" {
-                @for (href, label) in links {
-                    @let is_active = current_path == *href;
-                    li {
-                        a
-                            href=(*href)
-                            class={
-                                "sidebar-link block px-3 py-2 rounded-lg text-sm transition-all duration-200"
-                                @if is_active { " active" }
-                            }
-                            style={
-                                @if is_active {
-                                    "background: var(--ember-whisper); color: var(--ember-bright);"
-                                } @else {
-                                    "color: var(--ink-soft);"
-                                }
-                            }
-                        {
-                            (*label)
-                        }
-                    }
-                }
-            }
-        }
     }
 }

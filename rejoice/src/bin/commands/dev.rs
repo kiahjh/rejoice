@@ -8,44 +8,62 @@ use axum::{
 use colored::Colorize;
 use futures::{SinkExt, StreamExt};
 use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
+use rejoice::studio::{FileOps, handle_studio_socket};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
 
-fn run_npm_command(args: &[&str]) -> std::io::Result<std::process::ExitStatus> {
-    // Run npm through a shell to ensure proper PATH resolution
-    // This handles cases where npm is installed via nvm or in user-specific locations
-    #[cfg(not(windows))]
-    {
-        let npm_cmd = format!("npm {}", args.join(" "));
-        Command::new("sh")
-            .args(["-c", &npm_cmd])
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .status()
-    }
+fn check_bun_installed() {
+    let status = Command::new("bun")
+        .arg("--version")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
 
-    #[cfg(windows)]
-    {
-        let npm_cmd = format!("npm {}", args.join(" "));
-        Command::new("cmd")
-            .args(["/C", &npm_cmd])
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .status()
+    if status.is_err() {
+        style::print_error("Bun is not installed. Please install it first:");
+        eprintln!(
+            "    {}",
+            "curl -fsSL https://bun.sh/install | bash".dimmed()
+        );
+        eprintln!();
+        eprintln!("    {}", "For more info: https://bun.sh".dimmed());
+        std::process::exit(1);
     }
 }
 
-pub fn dev_command() {
+fn run_bun_command(args: &[&str]) -> std::io::Result<std::process::ExitStatus> {
+    Command::new("bun")
+        .args(args)
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status()
+}
+
+pub fn dev_command(studio: bool) {
     let rt = tokio::runtime::Runtime::new().unwrap();
-    rt.block_on(run_dev_server());
+    rt.block_on(run_dev_server(studio));
 }
 
-async fn run_dev_server() {
+async fn run_dev_server(studio: bool) {
     style::print_banner();
-    println!("\n  {}\n", "Starting development server...".dimmed());
+    if studio {
+        println!(
+            "\n  {} {}\n",
+            "Starting development server with".dimmed(),
+            "Studio".cyan().bold()
+        );
+        println!(
+            "  {} {} {}\n",
+            "Open".dimmed(),
+            "http://localhost:8000/__studio".cyan().underline(),
+            "to launch Studio".dimmed()
+        );
+    } else {
+        println!("\n  {}\n", "Starting development server...".dimmed());
+    }
 
     let client_dir = Path::new("client");
     let has_client = client_dir.exists();
@@ -56,10 +74,34 @@ async fn run_dev_server() {
 
     let reload_tx = Arc::new(broadcast::channel::<&'static str>(16).0);
 
-    // Start WebSocket server for live reload
+    // Initialize Studio file operations if enabled
+    let file_ops = if studio {
+        match FileOps::new(".") {
+            Ok(ops) => {
+                // Cleanup old history on startup
+                if let Err(e) = ops.cleanup_old_history() {
+                    eprintln!(
+                        "{} Failed to cleanup Studio history: {}",
+                        "!".yellow().bold(),
+                        e
+                    );
+                }
+                Some(Arc::new(ops))
+            }
+            Err(e) => {
+                eprintln!("{} Failed to initialize Studio: {}", "!".yellow().bold(), e);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    // Start WebSocket server for live reload (and Studio if enabled)
     let reload_tx_clone = reload_tx.clone();
+    let file_ops_clone = file_ops.clone();
     tokio::spawn(async move {
-        run_reload_server(reload_tx_clone).await;
+        run_reload_server(reload_tx_clone, file_ops_clone).await;
     });
 
     // Set up file watcher
@@ -67,13 +109,15 @@ async fn run_dev_server() {
 
     // Start the app
     style::print_compiling();
-    let mut child = start_app();
+    let mut child = start_app(studio);
 
     // Run the watch loop
-    run_watch_loop(watcher, &mut child, has_client, reload_tx);
+    run_watch_loop(watcher, &mut child, has_client, reload_tx, studio);
 }
 
 fn setup_client_build() {
+    check_bun_installed();
+
     let has_islands = has_island_components();
 
     if has_islands {
@@ -84,18 +128,18 @@ fn setup_client_build() {
         println!(
             "{} {}",
             "→".blue().bold(),
-            "Installing npm dependencies...".white()
+            "Installing dependencies...".white()
         );
-        let status = run_npm_command(&["install"]);
+        let status = run_bun_command(&["install"]);
 
         match status {
             Err(e) => {
-                style::print_error(&format!("Failed to run npm install: {}", e));
+                style::print_error(&format!("Failed to run bun install: {}", e));
                 std::process::exit(1);
             }
             Ok(s) if !s.success() => {
                 style::print_error(&format!(
-                    "npm install failed with exit code {}",
+                    "bun install failed with exit code {}",
                     s.code()
                         .map(|c| c.to_string())
                         .unwrap_or_else(|| "unknown".to_string())
@@ -174,6 +218,7 @@ fn run_watch_loop(
     child: &mut Child,
     has_islands: bool,
     reload_tx: Arc<broadcast::Sender<&'static str>>,
+    studio: bool,
 ) {
     let (_watcher, rx) = _watcher;
     let mut last_restart = Instant::now();
@@ -192,6 +237,7 @@ fn run_watch_loop(
                                 has_islands,
                                 &reload_tx,
                                 &mut last_restart,
+                                studio,
                             );
                         }
                     }
@@ -215,6 +261,7 @@ fn handle_file_change(
     has_islands: bool,
     reload_tx: &Arc<broadcast::Sender<&'static str>>,
     last_restart: &mut Instant,
+    studio: bool,
 ) {
     let is_client_only_change = event.paths.iter().all(|p| {
         let path_str = p.to_string_lossy();
@@ -232,7 +279,7 @@ fn handle_file_change(
     } else if is_client_only_change && has_islands {
         handle_client_change(reload_tx, last_restart);
     } else {
-        handle_rust_change(child, has_islands, reload_tx, last_restart);
+        handle_rust_change(child, has_islands, reload_tx, last_restart, studio);
     }
 }
 
@@ -269,6 +316,7 @@ fn handle_rust_change(
     has_islands: bool,
     reload_tx: &Arc<broadcast::Sender<&'static str>>,
     last_restart: &mut Instant,
+    studio: bool,
 ) {
     if has_islands {
         println!("{} {}", "↻".blue().bold(), "Rebuilding assets...".blue());
@@ -280,7 +328,7 @@ fn handle_rust_change(
     let _ = child.kill();
     let _ = child.wait();
 
-    *child = start_app();
+    *child = start_app(studio);
     *last_restart = Instant::now();
 
     let reload_tx = reload_tx.clone();
@@ -291,46 +339,54 @@ fn handle_rust_change(
 }
 
 fn run_vite_build() {
-    // Run npm build through shell for proper PATH resolution
-    #[cfg(not(windows))]
-    {
-        let _ = Command::new("sh")
-            .args(["-c", "npm run build"])
-            .stdout(Stdio::null())
-            .stderr(Stdio::inherit())
-            .status();
-    }
-
-    #[cfg(windows)]
-    {
-        let _ = Command::new("cmd")
-            .args(["/C", "npm run build"])
-            .stdout(Stdio::null())
-            .stderr(Stdio::inherit())
-            .status();
-    }
+    let _ = Command::new("bun")
+        .args(["run", "build"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::inherit())
+        .status();
 }
 
-fn start_app() -> Child {
-    Command::new("cargo")
-        .args(["run", "--quiet"])
+fn start_app(studio: bool) -> Child {
+    let mut cmd = Command::new("cargo");
+    cmd.args(["run", "--quiet"])
         .env("REJOICE_DEV", "1")
         .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .expect("Failed to start cargo run")
+        .stderr(Stdio::inherit());
+
+    if studio {
+        cmd.env("REJOICE_STUDIO", "1");
+    }
+
+    cmd.spawn().expect("Failed to start cargo run")
 }
 
 // WebSocket reload server
 
-async fn run_reload_server(reload_tx: Arc<broadcast::Sender<&'static str>>) {
-    let app = Router::new().route(
+async fn run_reload_server(
+    reload_tx: Arc<broadcast::Sender<&'static str>>,
+    file_ops: Option<Arc<FileOps>>,
+) {
+    let reload_tx_for_reload = reload_tx.clone();
+    let mut app = Router::new().route(
         "/__reload",
         get(move |ws: WebSocketUpgrade| {
-            let rx = reload_tx.subscribe();
+            let rx = reload_tx_for_reload.subscribe();
             async move { ws.on_upgrade(|socket| handle_reload_socket(socket, rx)) }
         }),
     );
+
+    // Add Studio WebSocket endpoint if file_ops is available
+    if let Some(ops) = file_ops {
+        let reload_tx_for_studio = reload_tx.clone();
+        app = app.route(
+            "/__studio",
+            get(move |ws: WebSocketUpgrade| {
+                let ops = ops.clone();
+                let rx = reload_tx_for_studio.subscribe();
+                async move { ws.on_upgrade(|socket| handle_studio_socket(socket, ops, rx)) }
+            }),
+        );
+    }
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3001")
         .await

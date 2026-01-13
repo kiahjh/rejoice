@@ -22,7 +22,11 @@ enum Commands {
         with_db: bool,
     },
     /// Start the development server
-    Dev,
+    Dev {
+        /// Enable Rejoice Studio visual editor
+        #[arg(long)]
+        studio: bool,
+    },
     /// Build the project for deployment
     Build {
         /// Build in release mode with optimizations
@@ -38,8 +42,8 @@ fn main() {
         Some(Commands::Init { name, with_db }) => {
             commands::init_command(name.as_ref(), with_db);
         }
-        Some(Commands::Dev) => {
-            commands::dev_command();
+        Some(Commands::Dev { studio }) => {
+            commands::dev_command(studio);
         }
         Some(Commands::Build { release }) => {
             commands::build_command(release);

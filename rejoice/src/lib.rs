@@ -7,6 +7,10 @@ mod island;
 mod request;
 mod response;
 
+// Studio module (dev-only but always compiled for macro support)
+#[doc(hidden)]
+pub mod studio;
+
 // Re-export dotenvy for the env! macro
 #[doc(hidden)]
 pub use dotenvy_macro;
@@ -27,6 +31,9 @@ pub use axum::{Router, routing};
 
 // Island support
 pub use island::island_fn;
+
+// Component macros
+pub use rejoice_macros::{PropEnum, component};
 
 // HTML/Maud - flattened to root level
 pub use maud::{DOCTYPE, Markup, PreEscaped, html};
@@ -79,6 +86,7 @@ macro_rules! routes {
 /// ```
 pub mod prelude {
     pub use crate::{
-        App, Children, DOCTYPE, Markup, Path, PreEscaped, Req, Res, html, island, json,
+        App, Children, DOCTYPE, Markup, Path, PreEscaped, PropEnum, Req, Res, component, html,
+        island, json,
     };
 }

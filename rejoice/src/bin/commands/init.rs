@@ -375,6 +375,8 @@ fn write_gitignore(project_dir: &Path, project_name: &str, with_db: bool) {
 /node_modules
 /dist
 /client/islands.tsx
+/.rejoice-studio
+bun.lockb
 .env
 {}.db
 "#,
@@ -385,6 +387,8 @@ fn write_gitignore(project_dir: &Path, project_name: &str, with_db: bool) {
 /node_modules
 /dist
 /client/islands.tsx
+/.rejoice-studio
+bun.lockb
 "#
         .to_string()
     };
