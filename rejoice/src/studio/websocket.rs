@@ -82,6 +82,18 @@ fn handle_message(text: &str, file_ops: &FileOps) -> ServerMessage {
                 error: result.error,
             }
         }
+        ClientMessage::EditClasses {
+            old_classes,
+            new_classes,
+            tag_hint,
+        } => {
+            let result =
+                file_ops.find_and_replace_classes(&old_classes, &new_classes, tag_hint.as_deref());
+            ServerMessage::EditResult {
+                success: result.success,
+                error: result.error,
+            }
+        }
         ClientMessage::Undo { file } => {
             let result = file_ops.undo(&file);
             ServerMessage::EditResult {

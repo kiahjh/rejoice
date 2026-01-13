@@ -5,6 +5,35 @@ use syn::{
     parse_macro_input,
 };
 
+/// Normalize a type string by removing extra spaces from token stream output.
+/// Converts "Option < & str >" to "Option<&str>"
+fn normalize_type_string(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        match c {
+            ' ' => {
+                // Skip spaces around punctuation: < > & ' :
+                // Keep space after comma for readability: "HashMap<K, V>"
+                let prev = result.chars().last();
+                let next = chars.peek();
+
+                let prev_is_punct = matches!(prev, Some('<' | '>' | '&' | '\'' | ':'));
+                let next_is_punct = matches!(next, Some(&'<' | &'>' | &',' | &'&' | &'\'' | &':'));
+
+                // Keep space only if neither adjacent char is punctuation
+                if !prev_is_punct && !next_is_punct {
+                    result.push(' ');
+                }
+            }
+            _ => result.push(c),
+        }
+    }
+
+    result
+}
+
 /// Information about a single prop extracted from the function signature
 struct PropInfo {
     name: syn::Ident,
@@ -260,8 +289,8 @@ pub fn component(_attr: TokenStream, item: TokenStream) -> TokenStream {
             let doc_comments = extract_doc_comments(&pat_type.attrs);
             let doc_string = extract_doc_string(&pat_type.attrs);
 
-            // Get type as string for registry
-            let ty_string = pat_type.ty.to_token_stream().to_string();
+            // Get type as string for registry (clean up token spacing)
+            let ty_string = normalize_type_string(&pat_type.ty.to_token_stream().to_string());
 
             // Get default value as string for registry
             let default_string = default_value

@@ -253,6 +253,9 @@ where
             .map(|q| q.contains("__studio_bridge"))
             .unwrap_or(false);
 
+        // Check if this is the Studio host page (don't inject live reload there)
+        let is_studio_host = req.uri().path() == "/__studio";
+
         Box::pin(async move {
             let response = inner.call(req).await?;
 
@@ -270,10 +273,11 @@ where
 
             // Build the scripts to inject before </body>
             let mut scripts = String::new();
-            if has_islands {
+            if has_islands && !is_studio_host {
                 scripts.push_str(ISLAND_SCRIPT);
             }
-            if dev_mode {
+            if dev_mode && !is_studio_host {
+                // Don't inject live reload into Studio host - it manages its own iframe
                 scripts.push_str(LIVE_RELOAD_SCRIPT);
             }
             // Inject bridge script when inside studio iframe

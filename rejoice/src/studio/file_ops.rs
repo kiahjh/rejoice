@@ -35,7 +35,8 @@ pub struct EditResult {
 impl FileOps {
     /// Create a new FileOps instance for the given project root.
     pub fn new(project_root: impl Into<PathBuf>) -> io::Result<Self> {
-        let project_root = project_root.into();
+        // Canonicalize the project root so we get the full path and proper file_name()
+        let project_root = fs::canonicalize(project_root.into())?;
         let studio_dir = project_root.join(STUDIO_DIR);
         let history_dir = studio_dir.join(HISTORY_DIR);
 
@@ -59,7 +60,38 @@ impl FileOps {
     ///
     /// Saves the current state to history before applying edits.
     pub fn apply_edits(&self, file: &str, edits: &[Edit]) -> EditResult {
-        let file_path = self.project_root.join(file);
+        // Handle both absolute and relative paths
+        let file_path = if Path::new(file).is_absolute() {
+            PathBuf::from(file)
+        } else {
+            let joined = self.project_root.join(file);
+            if joined.exists() {
+                joined
+            } else {
+                // file!() returns paths relative to Cargo.toml, which may include
+                // the crate directory name. If the joined path doesn't exist,
+                // try stripping the first component if it matches the project dir name.
+                if let Some(first_component) = Path::new(file).components().next() {
+                    if let Some(proj_name) = self.project_root.file_name() {
+                        if first_component.as_os_str() == proj_name {
+                            let stripped: PathBuf = Path::new(file).components().skip(1).collect();
+                            let alt_path = self.project_root.join(&stripped);
+                            if alt_path.exists() {
+                                alt_path
+                            } else {
+                                joined // Fall back to original for error message
+                            }
+                        } else {
+                            joined
+                        }
+                    } else {
+                        joined
+                    }
+                } else {
+                    joined
+                }
+            }
+        };
 
         // Read current content
         let content = match fs::read_to_string(&file_path) {
@@ -93,33 +125,37 @@ impl FileOps {
 
         for edit in edits {
             let line_idx = (edit.line as usize).saturating_sub(1);
-            if line_idx >= new_lines.len() {
-                return EditResult {
-                    success: false,
-                    error: Some(format!(
-                        "Line {} out of range (file has {} lines)",
-                        edit.line,
-                        new_lines.len()
-                    )),
-                    can_undo: self.can_undo(file),
-                    can_redo: self.can_redo(file),
-                };
-            }
 
-            let line = &new_lines[line_idx];
-            if !line.contains(&edit.old_text) {
-                return EditResult {
-                    success: false,
-                    error: Some(format!(
-                        "Text '{}' not found on line {}",
-                        edit.old_text, edit.line
-                    )),
-                    can_undo: self.can_undo(file),
-                    can_redo: self.can_redo(file),
-                };
-            }
+            // First try the exact line
+            let found_line_idx =
+                if line_idx < new_lines.len() && new_lines[line_idx].contains(&edit.old_text) {
+                    Some(line_idx)
+                } else {
+                    // If not found on exact line, search nearby (for components where
+                    // data-source points to the macro, not the element)
+                    let search_range = 50; // Search up to 50 lines after the hint
+                    let start = line_idx;
+                    let end = (line_idx + search_range).min(new_lines.len());
 
-            new_lines[line_idx] = line.replacen(&edit.old_text, &edit.new_text, 1);
+                    (start..end).find(|&i| new_lines[i].contains(&edit.old_text))
+                };
+
+            match found_line_idx {
+                Some(idx) => {
+                    new_lines[idx] = new_lines[idx].replacen(&edit.old_text, &edit.new_text, 1);
+                }
+                None => {
+                    return EditResult {
+                        success: false,
+                        error: Some(format!(
+                            "Text '{}' not found in file near line {}",
+                            edit.old_text, edit.line
+                        )),
+                        can_undo: self.can_undo(file),
+                        can_redo: self.can_redo(file),
+                    };
+                }
+            }
         }
 
         // Write back
@@ -308,6 +344,108 @@ impl FileOps {
     pub fn read_file(&self, file: &str) -> Result<String, String> {
         let file_path = self.project_root.join(file);
         fs::read_to_string(&file_path).map_err(|e| format!("Failed to read file: {}", e))
+    }
+
+    /// Search for a class attribute in source files and replace it.
+    /// Searches in src/routes/, src/components/, and src/ for .rs files.
+    pub fn find_and_replace_classes(
+        &self,
+        old_classes: &str,
+        new_classes: &str,
+        _tag_hint: Option<&str>,
+    ) -> EditResult {
+        // Patterns to search for - handle both class= and class:
+        // In Maud: class="..." or class: "..."
+        let patterns = [
+            format!(r#"class="{}""#, old_classes),
+            format!(r#"class: "{}""#, old_classes),
+            format!(r#"class="{}" "#, old_classes), // with trailing space
+        ];
+
+        // Search directories
+        let search_dirs = ["src/routes", "src/components", "src"];
+
+        for dir in &search_dirs {
+            let dir_path = self.project_root.join(dir);
+            if !dir_path.exists() {
+                continue;
+            }
+
+            if let Some(result) =
+                self.search_dir_for_classes(&dir_path, &patterns, old_classes, new_classes)
+            {
+                return result;
+            }
+        }
+
+        EditResult {
+            success: false,
+            error: Some(format!(
+                "Could not find class=\"{}\" in source files",
+                old_classes
+            )),
+            can_undo: false,
+            can_redo: false,
+        }
+    }
+
+    fn search_dir_for_classes(
+        &self,
+        dir: &Path,
+        patterns: &[String],
+        old_classes: &str,
+        new_classes: &str,
+    ) -> Option<EditResult> {
+        let entries = match fs::read_dir(dir) {
+            Ok(e) => e,
+            Err(_) => return None,
+        };
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+
+            if path.is_dir() {
+                // Recurse into subdirectories
+                if let Some(result) =
+                    self.search_dir_for_classes(&path, patterns, old_classes, new_classes)
+                {
+                    return Some(result);
+                }
+            } else if path.extension().and_then(|s| s.to_str()) == Some("rs") {
+                // Check this .rs file
+                if let Ok(content) = fs::read_to_string(&path) {
+                    for pattern in patterns {
+                        if content.contains(pattern.as_str()) {
+                            // Found it! Get relative path
+                            let rel_path = path
+                                .strip_prefix(&self.project_root)
+                                .unwrap_or(&path)
+                                .to_string_lossy()
+                                .to_string();
+
+                            // Find the line number
+                            for (idx, line) in content.lines().enumerate() {
+                                if line.contains(pattern.as_str()) {
+                                    let line_num = (idx + 1) as u32;
+                                    let new_pattern = pattern.replace(old_classes, new_classes);
+
+                                    return Some(self.apply_edits(
+                                        &rel_path,
+                                        &[super::protocol::Edit {
+                                            line: line_num,
+                                            old_text: pattern.clone(),
+                                            new_text: new_pattern,
+                                        }],
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        None
     }
 
     /// Check if undo is available for a file.

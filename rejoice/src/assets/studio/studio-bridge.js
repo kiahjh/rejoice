@@ -3,6 +3,13 @@
  * Handles element selection and DOM inspection inside the iframe.
  */
 
+// Inject Tailwind CDN for instant class support in Studio
+(function injectTailwindCDN() {
+  const script = document.createElement('script');
+  script.src = 'https://cdn.tailwindcss.com';
+  document.head.appendChild(script);
+})();
+
 let selectMode = false;
 let lastHover = null;
 
@@ -35,6 +42,20 @@ window.addEventListener('message', e => {
       selectEl(el);
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
+  }
+  else if (m.type === 'hover-by-path') {
+    const el = getByPath(m.path);
+    if (el) {
+      const r = el.getBoundingClientRect();
+      post({ 
+        type: 'hover', 
+        rect: { left: r.left, top: r.top, width: r.width, height: r.height },
+        tagName: el.tagName.toLowerCase()
+      });
+    }
+  }
+  else if (m.type === 'hover-end-tree') {
+    post({ type: 'hover-end' });
   }
 });
 
@@ -116,8 +137,26 @@ function getByPath(path) {
 function buildTree(el, path, depth) {
   if (!el?.tagName || depth > 12) return null;
   const t = el.tagName.toLowerCase();
-  if (t === 'script' || t === 'style') return null;
-  const node = { tagName: t, path, componentName: el.dataset?.component || null, children: [] };
+  if (t === 'script' || t === 'style' || t === 'svg') return null; // Skip SVGs for now
+  
+  // Get className safely (SVG elements have className as SVGAnimatedString)
+  let classStr = '';
+  if (typeof el.className === 'string') {
+    classStr = el.className;
+  } else if (el.className?.baseVal) {
+    classStr = el.className.baseVal;
+  } else if (el.getAttribute) {
+    classStr = el.getAttribute('class') || '';
+  }
+  
+  const node = { 
+    tagName: t, 
+    path, 
+    componentName: el.dataset?.component || null,
+    id: el.id || null,
+    classes: classStr ? classStr.split(/\s+/).filter(Boolean).slice(0, 3) : [],
+    children: [] 
+  };
   for (let i = 0; i < el.children.length; i++) {
     const c = buildTree(el.children[i], `${path}-${i}`, depth + 1);
     if (c) node.children.push(c);

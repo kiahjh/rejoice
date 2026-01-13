@@ -27,6 +27,15 @@ pub enum ClientMessage {
         /// List of edits to apply
         edits: Vec<Edit>,
     },
+    /// Search and replace a class attribute across source files
+    EditClasses {
+        /// The old class string to find (e.g., "flex items-center")
+        old_classes: String,
+        /// The new class string to replace with
+        new_classes: String,
+        /// Optional: hint about the tag name to help disambiguate
+        tag_hint: Option<String>,
+    },
     /// Undo the last edit to a file
     Undo {
         /// Path to the file
