@@ -23,14 +23,11 @@ window.addEventListener('message', e => {
     document.documentElement.classList.toggle('studio-select', m.enabled);
     if (!m.enabled) lastHover = null;
   }
-  else if (m.type === 'apply-classes') {
+  else if (m.type === 'preview-classes') {
+    // Instant preview - just update classes, no highlight flash
     const el = getByPath(m.path);
     if (el) {
       el.className = m.classes;
-      // Brief highlight
-      el.style.outline = '2px solid #888';
-      el.style.outlineOffset = '2px';
-      setTimeout(() => { el.style.outline = ''; el.style.outlineOffset = ''; }, 150);
     }
   }
   else if (m.type === 'get-tree') {

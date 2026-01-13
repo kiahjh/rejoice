@@ -18,12 +18,49 @@ const State = {
   wsConnected: false,
   activeTab: "inspect",
   iframe: null,
-  panelWidth: 380,
+  panelWidth: 530,
   isResizing: false,
   shadowRoot: null, // Shadow root for panel isolation
 };
 
 const MIN_PANEL_WIDTH = 380;
+
+// =============================================================================
+// Design Tokens
+// =============================================================================
+
+const CSS_VARS = `
+  /* Deep space background */
+  --void: #07070a;
+  --bg: #0c0c12;
+  --bg2: #12121a;
+  --bg3: #1a1a24;
+  --bg4: #22222e;
+  
+  /* Subtle purple-tinted borders */
+  --border: rgba(139, 133, 198, 0.12);
+  --border-light: rgba(139, 133, 198, 0.2);
+  --border-bright: rgba(139, 133, 198, 0.35);
+  
+  /* Text with slight warmth */
+  --text: #f4f4f7;
+  --text2: #a8a8b3;
+  --text3: #6a6a78;
+  
+  /* Fun accent gradient */
+  --accent1: #f0abfc;
+  --accent2: #818cf8;
+  --accent-glow: rgba(192, 148, 252, 0.4);
+  
+  /* Semantic colors */
+  --green: #6ee7b7;
+  --green-dim: rgba(110, 231, 183, 0.12);
+  --red: #fca5a5;
+  --yellow: #fcd34d;
+  
+  --radius: 12px;
+  --radius-sm: 8px;
+`;
 
 // =============================================================================
 // Init
@@ -427,66 +464,81 @@ function renderInspect() {
   
   const applyBtn = $panel("#apply-btn");
   const classesInput = $panel("#classes-input");
-  const originalClasses = el.classes || '';
   
-  // Update button state when input changes
-  function updateButtonState() {
-    const hasChanges = classesInput.value !== originalClasses;
-    applyBtn.disabled = !hasChanges;
+  // Track what's saved in the filesystem (updates after successful sync)
+  // Initialize to current classes if not already set
+  if (el.savedClasses === undefined) {
+    el.savedClasses = el.classes || '';
   }
   
-  classesInput.addEventListener("input", updateButtonState);
+  // Update button state and preview when input changes
+  function onClassesInput() {
+    const newClasses = classesInput.value;
+    const hasChanges = newClasses !== el.savedClasses;
+    applyBtn.disabled = !hasChanges;
+    
+    // Instant preview: update element in iframe immediately
+    send({ type: "preview-classes", path: el.path, classes: newClasses });
+  }
   
+  classesInput.addEventListener("input", onClassesInput);
+  
+  // Apply = sync to filesystem
   applyBtn.addEventListener("click", () => {
-    applyClasses(classesInput.value);
-    applyBtn.disabled = true; // Disable after applying
+    applyBtn.disabled = true; // Optimistically disable
+    syncClassesToFile(classesInput.value);
   });
   
   classesInput.addEventListener("keydown", e => {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !applyBtn.disabled) {
       e.preventDefault();
-      applyClasses(classesInput.value);
-      applyBtn.disabled = true;
+      applyBtn.disabled = true; // Optimistically disable
+      syncClassesToFile(classesInput.value);
     }
   });
 }
 
-function applyClasses(classes) {
+// Sync classes to filesystem (called when Apply is clicked or cmd+enter)
+function syncClassesToFile(classes) {
   const el = State.selectedElement;
-  if (!el || el.classes === classes) return;
+  if (!el) return;
   
-  const old = el.classes || "";
-  send({ type: "apply-classes", path: el.path, classes });
-  el.classes = classes;
+  const old = el.savedClasses || "";
   
-  if (el.sourceLocation) {
-    // We have exact source location from #[component]
-    // Format: /path/to/file.rs:line:column
-    const parts = el.sourceLocation.split(":");
-    const column = parts.pop(); // remove column
-    const line = parts.pop();   // remove line  
-    const file = parts.join(":"); // rejoin in case path has colons (Windows)
-    if (file && line) {
+  if (old) {
+    // Store pending classes - will be committed on successful save
+    State.pendingClassesSync = classes;
+    
+    // We have existing classes to search for
+    if (el.sourceLocation) {
+      // We have exact source location from #[component]
+      // Format: /path/to/file.rs:line:column
+      const parts = el.sourceLocation.split(":");
+      const column = parts.pop(); // remove column
+      const line = parts.pop();   // remove line  
+      const file = parts.join(":"); // rejoin in case path has colons (Windows)
+      if (file && line) {
+        State.pendingToast = toast("Saving changes...", "loading");
+        showCanvasLoading(true);
+        sendWS({
+          type: "edit_file",
+          file,
+          edits: [{ line: parseInt(line), old_text: `class="${old}"`, new_text: `class="${classes}"` }],
+        });
+      }
+    } else {
+      // No source location - search all files for the class string
       State.pendingToast = toast("Saving changes...", "loading");
       showCanvasLoading(true);
       sendWS({
-        type: "edit_file",
-        file,
-        edits: [{ line: parseInt(line), old_text: `class="${old}"`, new_text: `class="${classes}"` }],
+        type: "edit_classes",
+        old_classes: old,
+        new_classes: classes,
+        tag_hint: el.tagName,
       });
     }
-  } else if (old) {
-    // No source location, but we have old classes - search for them
-    State.pendingToast = toast("Saving changes...", "loading");
-    showCanvasLoading(true);
-    sendWS({
-      type: "edit_classes",
-      old_classes: old,
-      new_classes: classes,
-      tag_hint: el.tagName,
-    });
   } else {
-    // No old classes to search for - preview only
+    // No existing classes - can't reliably find where to add them
     toast("Preview only (no existing classes)", "success");
   }
 }
@@ -663,9 +715,16 @@ function connectWS() {
         State.pendingToast = null;
         
         if (m.success) {
+          // Commit the pending classes - they're now saved in the filesystem
+          if (State.pendingClassesSync !== undefined && State.selectedElement) {
+            State.selectedElement.savedClasses = State.pendingClassesSync;
+            State.selectedElement.classes = State.pendingClassesSync;
+            State.pendingClassesSync = undefined;
+          }
           // Show compiling toast - will be replaced when HMR completes
           State.pendingToast = toast("Recompiling...", "loading");
         } else {
+          State.pendingClassesSync = undefined;
           showCanvasLoading(false);
           toast(m.error || "Failed to save", "error");
         }
@@ -759,37 +818,7 @@ function injectLightStyles() {
   s.textContent = `
 :root {
   --panel-width: 380px;
-  
-  /* Deep space background */
-  --void: #07070a;
-  --bg: #0c0c12;
-  --bg2: #12121a;
-  --bg3: #1a1a24;
-  --bg4: #22222e;
-  
-  /* Subtle purple-tinted borders */
-  --border: rgba(139, 133, 198, 0.12);
-  --border-light: rgba(139, 133, 198, 0.2);
-  --border-bright: rgba(139, 133, 198, 0.35);
-  
-  /* Text with slight warmth */
-  --text: #f4f4f7;
-  --text2: #a8a8b3;
-  --text3: #6a6a78;
-  
-  /* Fun accent gradient */
-  --accent1: #f0abfc;
-  --accent2: #818cf8;
-  --accent-glow: rgba(192, 148, 252, 0.4);
-  
-  /* Semantic colors */
-  --green: #6ee7b7;
-  --green-dim: rgba(110, 231, 183, 0.12);
-  --red: #fca5a5;
-  --yellow: #fcd34d;
-  
-  --radius: 12px;
-  --radius-sm: 8px;
+  ${CSS_VARS}
 }
 
 * { box-sizing: border-box; }
@@ -1110,35 +1139,7 @@ function getPanelStyles() {
   font: 13px/1.5 'Space Grotesk', system-ui, sans-serif;
   color: #a8a8b3;
   -webkit-font-smoothing: antialiased;
-}
-
-/* CSS Variables inside shadow DOM */
-:host {
-  --void: #07070a;
-  --bg: #0c0c12;
-  --bg2: #12121a;
-  --bg3: #1a1a24;
-  --bg4: #22222e;
-  
-  --border: rgba(139, 133, 198, 0.12);
-  --border-light: rgba(139, 133, 198, 0.2);
-  --border-bright: rgba(139, 133, 198, 0.35);
-  
-  --text: #f4f4f7;
-  --text2: #a8a8b3;
-  --text3: #6a6a78;
-  
-  --accent1: #f0abfc;
-  --accent2: #818cf8;
-  --accent-glow: rgba(192, 148, 252, 0.4);
-  
-  --green: #6ee7b7;
-  --green-dim: rgba(110, 231, 183, 0.12);
-  --red: #fca5a5;
-  --yellow: #fcd34d;
-  
-  --radius: 12px;
-  --radius-sm: 8px;
+  ${CSS_VARS}
 }
 
 * { box-sizing: border-box; }

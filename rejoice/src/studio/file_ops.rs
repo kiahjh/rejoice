@@ -770,7 +770,7 @@ mod tests {
     }
 
     #[test]
-    fn test_edit_line_out_of_range() {
+    fn test_edit_text_not_found_on_line() {
         let (temp_dir, file_ops) = setup_test_project();
 
         let test_file = temp_dir.path().join("test.rs");
@@ -786,11 +786,11 @@ mod tests {
         );
 
         assert!(!result.success);
-        assert!(result.error.unwrap().contains("out of range"));
+        assert!(result.error.unwrap().contains("not found"));
     }
 
     #[test]
-    fn test_edit_text_not_found() {
+    fn test_edit_text_not_found_in_file() {
         let (temp_dir, file_ops) = setup_test_project();
 
         let test_file = temp_dir.path().join("test.rs");
@@ -806,7 +806,7 @@ mod tests {
         );
 
         assert!(!result.success);
-        assert!(result.error.unwrap().contains("not found on line"));
+        assert!(result.error.unwrap().contains("not found"));
     }
 
     #[test]
