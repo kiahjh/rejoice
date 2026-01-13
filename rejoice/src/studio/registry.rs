@@ -38,11 +38,22 @@ pub struct ComponentMeta {
     pub props: &'static [PropMeta],
 }
 
+/// Type alias for preview functions.
+/// Takes a HashMap of prop name -> JSON value string, returns rendered Markup.
+pub type PreviewFn = fn(&HashMap<String, String>) -> maud::Markup;
+
 /// Global component registry.
 static REGISTRY: OnceLock<RwLock<HashMap<&'static str, ComponentMeta>>> = OnceLock::new();
 
+/// Global preview function registry.
+static PREVIEW_REGISTRY: OnceLock<RwLock<HashMap<&'static str, PreviewFn>>> = OnceLock::new();
+
 fn get_registry() -> &'static RwLock<HashMap<&'static str, ComponentMeta>> {
     REGISTRY.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+fn get_preview_registry() -> &'static RwLock<HashMap<&'static str, PreviewFn>> {
+    PREVIEW_REGISTRY.get_or_init(|| RwLock::new(HashMap::new()))
 }
 
 /// Register a component in the global registry.
@@ -55,9 +66,30 @@ pub fn register_component(meta: ComponentMeta) {
     }
 }
 
+/// Register a preview function for a component.
+///
+/// This is called automatically by the `#[component]` macro in debug builds.
+pub fn register_preview(name: &'static str, preview_fn: PreviewFn) {
+    if let Ok(mut registry) = get_preview_registry().write() {
+        registry.insert(name, preview_fn);
+    }
+}
+
 /// Get a component's metadata by name.
 pub fn get_component(name: &str) -> Option<ComponentMeta> {
     get_registry().read().ok()?.get(name).cloned()
+}
+
+/// Get a component's preview function by name.
+pub fn get_preview(name: &str) -> Option<PreviewFn> {
+    get_preview_registry().read().ok()?.get(name).copied()
+}
+
+/// Render a component preview with the given props.
+/// Returns None if the component doesn't have a registered preview function.
+pub fn render_preview(name: &str, props: &HashMap<String, String>) -> Option<maud::Markup> {
+    let preview_fn = get_preview(name)?;
+    Some(preview_fn(props))
 }
 
 /// Get all registered components.

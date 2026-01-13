@@ -189,6 +189,204 @@ fn is_option_type(ty: &Type) -> bool {
     false
 }
 
+/// Generate code to parse a prop value from a string in the preview function.
+/// Returns (storage_var, value_expr) where storage_var holds owned data and value_expr borrows from it.
+fn generate_prop_parser(
+    prop: &PropInfo,
+    param_name: &str,
+) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
+    let name = &prop.name;
+    let ty_string = &prop.ty_string;
+    let storage_name = syn::Ident::new(&format!("__{}_storage", name), name.span());
+
+    // Determine how to parse based on type
+    let (storage, value) = if ty_string == "&str" {
+        // Store as String, borrow as &str
+        let default_val = prop
+            .default_string
+            .as_deref()
+            .unwrap_or("\"Example\"")
+            .to_string();
+        (
+            quote! {
+                let #storage_name: String = __props.get(#param_name)
+                    .and_then(|s| rejoice::serde_json::from_str::<String>(s).ok())
+                    .unwrap_or_else(|| #default_val.to_string());
+            },
+            quote! { #storage_name.as_str() },
+        )
+    } else if ty_string == "String" {
+        let default_val = prop
+            .default_string
+            .as_deref()
+            .unwrap_or("\"Example\"")
+            .to_string();
+        (
+            quote! {
+                let #storage_name: String = __props.get(#param_name)
+                    .and_then(|s| rejoice::serde_json::from_str::<String>(s).ok())
+                    .unwrap_or_else(|| #default_val.to_string());
+            },
+            quote! { #storage_name },
+        )
+    } else if ty_string == "bool" {
+        let default_val = prop.default_string.as_deref().unwrap_or("false");
+        let default_bool: bool = default_val == "true";
+        (
+            quote! {
+                let #storage_name: bool = __props.get(#param_name)
+                    .and_then(|s| rejoice::serde_json::from_str::<bool>(s).ok())
+                    .unwrap_or(#default_bool);
+            },
+            quote! { #storage_name },
+        )
+    } else if ty_string == "i32"
+        || ty_string == "i64"
+        || ty_string == "u32"
+        || ty_string == "u64"
+        || ty_string == "usize"
+        || ty_string == "isize"
+    {
+        let ty_ident = syn::Ident::new(ty_string, name.span());
+        let default_val = prop.default_string.as_deref().unwrap_or("0");
+        let default_num: i64 = default_val.parse().unwrap_or(0);
+        (
+            quote! {
+                let #storage_name: #ty_ident = __props.get(#param_name)
+                    .and_then(|s| rejoice::serde_json::from_str::<#ty_ident>(s).ok())
+                    .unwrap_or(#default_num as #ty_ident);
+            },
+            quote! { #storage_name },
+        )
+    } else if ty_string == "f32" || ty_string == "f64" {
+        let ty_ident = syn::Ident::new(ty_string, name.span());
+        let default_val = prop.default_string.as_deref().unwrap_or("0.0");
+        let default_num: f64 = default_val.parse().unwrap_or(0.0);
+        (
+            quote! {
+                let #storage_name: #ty_ident = __props.get(#param_name)
+                    .and_then(|s| rejoice::serde_json::from_str::<#ty_ident>(s).ok())
+                    .unwrap_or(#default_num as #ty_ident);
+            },
+            quote! { #storage_name },
+        )
+    } else if ty_string.starts_with("Option<") {
+        // Extract inner type from Option<T>
+        let inner = &ty_string[7..ty_string.len() - 1];
+        if inner == "&str" {
+            (
+                quote! {
+                    let #storage_name: Option<String> = __props.get(#param_name)
+                        .and_then(|s| {
+                            if s == "null" { None }
+                            else { rejoice::serde_json::from_str::<String>(s).ok() }
+                        });
+                },
+                quote! { #storage_name.as_deref() },
+            )
+        } else if inner == "String" {
+            (
+                quote! {
+                    let #storage_name: Option<String> = __props.get(#param_name)
+                        .and_then(|s| {
+                            if s == "null" { None }
+                            else { rejoice::serde_json::from_str::<String>(s).ok() }
+                        });
+                },
+                quote! { #storage_name },
+            )
+        } else if inner == "bool" {
+            (
+                quote! {
+                    let #storage_name: Option<bool> = __props.get(#param_name)
+                        .and_then(|s| {
+                            if s == "null" { None }
+                            else { rejoice::serde_json::from_str::<bool>(s).ok() }
+                        });
+                },
+                quote! { #storage_name },
+            )
+        } else {
+            // For other Option types, try to parse as the inner type
+            (
+                quote! {
+                    let #storage_name: Option<String> = __props.get(#param_name)
+                        .and_then(|s| {
+                            if s == "null" { None }
+                            else { rejoice::serde_json::from_str::<String>(s).ok() }
+                        });
+                },
+                quote! { #storage_name },
+            )
+        }
+    } else if ty_string.starts_with("&[") || ty_string.starts_with("[") {
+        // Slice types - can't be edited in preview, use default or empty slice
+        let ty = &prop.ty;
+        if let Some(default) = &prop.default_value {
+            (
+                quote! {
+                    let #storage_name: #ty = #default;
+                },
+                quote! { #storage_name },
+            )
+        } else {
+            // Use empty slice for preview
+            (
+                quote! {
+                    let #storage_name: #ty = &[];
+                },
+                quote! { #storage_name },
+            )
+        }
+    } else if ty_string.starts_with("PreEscaped<") {
+        // Maud PreEscaped type - can't be edited in preview, must have default
+        let ty = &prop.ty;
+        if let Some(default) = &prop.default_value {
+            (
+                quote! {
+                    let #storage_name: #ty = #default;
+                },
+                quote! { #storage_name },
+            )
+        } else {
+            (
+                quote! {
+                    let #storage_name: #ty = maud::PreEscaped(String::new());
+                },
+                quote! { #storage_name },
+            )
+        }
+    } else {
+        // For custom types (likely enums with PropEnum):
+        // - If there's a default value, always use it (preview can't edit these)
+        // - Otherwise, try PropEnum pattern
+        let ty = &prop.ty;
+        if let Some(default) = &prop.default_value {
+            // Has a default - use it directly (preview won't be editable for this prop)
+            (
+                quote! {
+                    let #storage_name: #ty = #default;
+                },
+                quote! { #storage_name },
+            )
+        } else {
+            // No default - try PropEnum pattern, but this may fail to compile
+            // which is intentional - it tells the user they need to add a default
+            (
+                quote! {
+                    let #storage_name: #ty = __props.get(#param_name)
+                        .and_then(|s| rejoice::serde_json::from_str::<String>(s).ok())
+                        .and_then(|s| #ty::prop_enum_from_name(&s))
+                        .expect(concat!("Prop '", #param_name, "' requires #[derive(PropEnum)] or #[prop(default = ...)]"));
+                },
+                quote! { #storage_name },
+            )
+        }
+    };
+
+    (storage, value)
+}
+
 /// Transforms a function into a component struct with builder pattern API.
 ///
 /// # Example
@@ -448,6 +646,42 @@ pub fn component(_attr: TokenStream, item: TokenStream) -> TokenStream {
         fn_name.span(),
     );
 
+    // Generate preview function code
+    // This parses props from a HashMap<String, String> and constructs the component
+    let preview_fn_name = syn::Ident::new(
+        &format!("__rejoice_preview_{}", fn_name.to_string().to_lowercase()),
+        fn_name.span(),
+    );
+
+    let (preview_storages, preview_values): (Vec<_>, Vec<_>) = props
+        .iter()
+        .map(|prop| {
+            let param_name = prop.name.to_string();
+            generate_prop_parser(prop, &param_name)
+        })
+        .unzip();
+
+    // Generate constructor call with parsed values
+    // Required props go to new(), optional props use builder methods
+    let preview_required_args: Vec<_> = required_props
+        .iter()
+        .enumerate()
+        .map(|(_, prop)| {
+            let idx = props.iter().position(|p| p.name == prop.name).unwrap();
+            &preview_values[idx]
+        })
+        .collect();
+
+    let preview_builder_calls: Vec<_> = optional_props
+        .iter()
+        .map(|prop| {
+            let name = &prop.name;
+            let idx = props.iter().position(|p| p.name == prop.name).unwrap();
+            let value = &preview_values[idx];
+            quote! { .#name(#value) }
+        })
+        .collect();
+
     // Generate the output
     let output = quote! {
         #(#fn_docs)*
@@ -489,11 +723,39 @@ pub fn component(_attr: TokenStream, item: TokenStream) -> TokenStream {
                         doc: #component_doc_token,
                         props: #props_static_name,
                     });
+                    rejoice::studio::register_preview(#component_name_str, #preview_fn_name);
                 }
             }
 
             #[cfg(not(debug_assertions))]
             fn __register_component() {}
+
+            /// Preview function for Studio isolation mode (debug builds only).
+            /// Parses props from string values and renders the component.
+            #[cfg(debug_assertions)]
+            #[doc(hidden)]
+            pub fn __studio_preview(__props: &std::collections::HashMap<String, String>) -> maud::Markup {
+                use maud::Render;
+                #(#preview_storages)*
+                #fn_name::new(#(#preview_required_args),*)#(#preview_builder_calls)*.render()
+            }
+
+            #[cfg(not(debug_assertions))]
+            #[doc(hidden)]
+            pub fn __studio_preview(__props: &std::collections::HashMap<String, String>) -> maud::Markup {
+                maud::html! { "Preview not available in release builds" }
+            }
+        }
+
+        // Standalone preview function wrapper for registry (debug builds only)
+        #[cfg(debug_assertions)]
+        fn #preview_fn_name(__props: &std::collections::HashMap<String, String>) -> maud::Markup {
+            #fn_name::__studio_preview(__props)
+        }
+
+        #[cfg(not(debug_assertions))]
+        fn #preview_fn_name(__props: &std::collections::HashMap<String, String>) -> maud::Markup {
+            maud::html! { "Preview not available in release builds" }
         }
 
         impl maud::Render for #fn_name #impl_lifetime {

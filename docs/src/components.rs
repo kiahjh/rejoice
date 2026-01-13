@@ -1,5 +1,5 @@
 use maud::Render;
-use rejoice::{Markup, PreEscaped, component, html};
+use rejoice::{Markup, PreEscaped, PropEnum, component, html};
 
 // =============================================================================
 // Logo
@@ -61,7 +61,7 @@ pub fn SectionHeader(
 // =============================================================================
 
 /// Icon type for feature cards
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PropEnum)]
 pub enum FeatureIcon {
     FileRoutes,
     TypeSafe,
@@ -192,7 +192,7 @@ pub fn VersionBadge(
 // =============================================================================
 
 /// Background style for sections
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, PropEnum)]
 pub enum SectionBackground {
     #[default]
     Void,

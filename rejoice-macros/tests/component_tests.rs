@@ -165,7 +165,7 @@ fn test_partial_builder_chain() {
 #[component]
 pub fn NonRefTypes(
     count: i32,
-    #[prop(default = 3.14)] pi: f64,
+    #[prop(default = std::f64::consts::PI)] pi: f64,
     #[prop(default = true)] flag: bool,
 ) -> Markup {
     html! {

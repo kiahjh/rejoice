@@ -54,6 +54,7 @@ impl App {
         // Add Studio host page when in studio mode
         if studio_mode {
             router = router.route("/__studio", get(studio_host_handler));
+            router = router.route("/__studio/preview/{component}", get(studio_preview_handler));
         }
 
         router = router.layer(
@@ -144,6 +145,128 @@ async fn studio_host_handler() -> axum::response::Html<String> {
 </html>"#,
         STUDIO_HOST_SCRIPT
     );
+    axum::response::Html(html)
+}
+
+async fn studio_preview_handler(
+    axum::extract::Path(component): axum::extract::Path<String>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> axum::response::Html<String> {
+    use maud::Render;
+
+    // Extract background color (default to white)
+    let bg_color = params
+        .get("__bg")
+        .cloned()
+        .unwrap_or_else(|| "#ffffff".to_string());
+
+    // Extract props from query params (they come as prop_name=json_value)
+    let props: std::collections::HashMap<String, String> = params
+        .iter()
+        .filter_map(|(k, v)| {
+            k.strip_prefix("prop_")
+                .map(|name| (name.to_string(), v.clone()))
+        })
+        .collect();
+
+    // Try to render using registered preview function
+    let content = if let Some(markup) = crate::studio::render_preview(&component, &props) {
+        // Successfully rendered component
+        markup.render().into_string()
+    } else if let Some(meta) = crate::studio::get_component(&component) {
+        // Component exists but no preview function registered yet
+        // This happens if the component hasn't been rendered yet in the app
+        format!(
+            r#"<div class="preview-placeholder">
+                <div class="component-badge">{}</div>
+                <p>Preview will be available once this component is rendered in your app.</p>
+                <p class="hint">Visit a page that uses this component, then try again.</p>
+            </div>"#,
+            meta.name
+        )
+    } else {
+        // Component not found at all
+        format!(
+            r#"<div class="error">Component "{}" not found in registry</div>"#,
+            component
+        )
+    };
+
+    let html = format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{} Preview - Rejoice Studio</title>
+    <!-- Load Tailwind for utility classes -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load common fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+    <!-- Load app styles for component styling (CSS vars, component classes, etc) -->
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        /* Override body background - don't inherit app's background */
+        body {{
+            font-family: 'Inter', system-ui, sans-serif;
+            background: {} !important;
+            background-image: none !important;
+            margin: 0;
+            padding: 40px;
+            min-height: 100vh;
+            /* Center the component */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }}
+        /* Also override html in case styles are applied there */
+        html {{
+            background: {} !important;
+            background-image: none !important;
+        }}
+        .preview-placeholder {{
+            text-align: center;
+            padding: 60px 40px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            max-width: 500px;
+            margin: 40px auto;
+        }}
+        .preview-placeholder .component-badge {{
+            display: inline-block;
+            padding: 8px 16px;
+            background: linear-gradient(135deg, #6ee7b7, #34d399);
+            border-radius: 8px;
+            font-weight: 600;
+            color: #064e3b;
+            margin-bottom: 16px;
+        }}
+        .preview-placeholder p {{
+            color: #64748b;
+            margin: 8px 0;
+        }}
+        .preview-placeholder .hint {{
+            font-size: 12px;
+            color: #94a3b8;
+        }}
+        .error {{
+            text-align: center;
+            padding: 60px;
+            color: #ef4444;
+            font-size: 16px;
+        }}
+    </style>
+</head>
+<body>
+    {}
+</body>
+</html>"#,
+        component, bg_color, bg_color, content
+    );
+
     axum::response::Html(html)
 }
 

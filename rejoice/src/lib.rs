@@ -39,7 +39,9 @@ pub use rejoice_macros::{PropEnum, component};
 pub use maud::{DOCTYPE, Markup, PreEscaped, html};
 
 // JSON
-pub use serde_json::json;
+#[doc(hidden)]
+pub use serde_json;
+pub use serde_json::json; // Re-export for macro-generated code
 
 // Type alias for layout children
 pub type Children = Markup;

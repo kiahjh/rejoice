@@ -1,6 +1,6 @@
 /**
  * Rejoice Studio
- * 
+ *
  * A delightful visual development environment.
  * Playful but productive. Fun but functional.
  */
@@ -14,13 +14,17 @@ const State = {
   selectMode: false,
   selectedElement: null,
   components: [],
+  componentsOnPage: {}, // { componentName: [path1, path2, ...] }
   ws: null,
   wsConnected: false,
   activeTab: "inspect",
   iframe: null,
+  previewIframe: null, // Second iframe for isolation mode
   panelWidth: 530,
   isResizing: false,
   shadowRoot: null, // Shadow root for panel isolation
+  // Isolation mode
+  isolatedComponent: null, // { name, meta, props: { propName: value, ... } }
 };
 
 const MIN_PANEL_WIDTH = 380;
@@ -67,16 +71,20 @@ const CSS_VARS = `
 // =============================================================================
 
 function init() {
-  document.head.insertAdjacentHTML('beforeend', `
+  document.head.insertAdjacentHTML(
+    "beforeend",
+    `
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  `);
-  
+  `,
+  );
+
   // Main structure - panel content will be in shadow DOM
   document.body.innerHTML = `
     <div id="studio">
       <div id="stage">
         <div id="canvas">
           <iframe id="iframe" src="${getAppUrl()}"></iframe>
+          <iframe id="preview-iframe"></iframe>
         </div>
       </div>
       
@@ -85,6 +93,11 @@ function init() {
       </div>
       
       <div id="resize-handle"></div>
+      
+      <div id="width-indicator">
+        <div class="width-line"></div>
+        <div class="width-label">0px</div>
+      </div>
       
       <aside id="panel"></aside>
       
@@ -103,14 +116,14 @@ function init() {
       </button>
     </div>
   `;
-  
+
   // Inject light DOM styles (for stage, canvas, highlight, toggle)
   injectLightStyles();
-  
+
   // Create shadow DOM for panel
   const panel = document.getElementById("panel");
   State.shadowRoot = panel.attachShadow({ mode: "open" });
-  
+
   // Inject panel HTML and styles into shadow DOM
   State.shadowRoot.innerHTML = `
     <style>${getPanelStyles()}</style>
@@ -215,10 +228,14 @@ function init() {
       </div>
     </footer>
   `;
-  
+
   State.iframe = document.getElementById("iframe");
-  document.documentElement.style.setProperty("--panel-width", State.panelWidth + "px");
-  
+  State.previewIframe = document.getElementById("preview-iframe");
+  document.documentElement.style.setProperty(
+    "--panel-width",
+    State.panelWidth + "px",
+  );
+
   bindEvents();
   connectWS();
   fetchComponents();
@@ -226,8 +243,8 @@ function init() {
 
 function getAppUrl() {
   const params = new URLSearchParams(window.location.search);
-  const path = params.get('path') || '/';
-  return path + (path.includes('?') ? '&' : '?') + '__studio_bridge=1';
+  const path = params.get("path") || "/";
+  return path + (path.includes("?") ? "&" : "?") + "__studio_bridge=1";
 }
 
 // =============================================================================
@@ -235,12 +252,12 @@ function getAppUrl() {
 // =============================================================================
 
 // Query light DOM (stage, canvas, highlight, toggle)
-const $ = s => document.querySelector(s);
-const $$ = s => document.querySelectorAll(s);
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => document.querySelectorAll(s);
 
 // Query shadow DOM (panel content)
-const $panel = s => State.shadowRoot?.querySelector(s);
-const $$panel = s => State.shadowRoot?.querySelectorAll(s);
+const $panel = (s) => State.shadowRoot?.querySelector(s);
+const $$panel = (s) => State.shadowRoot?.querySelectorAll(s);
 
 // =============================================================================
 // Events
@@ -250,45 +267,73 @@ function bindEvents() {
   $("#toggle").addEventListener("click", toggle);
   $panel("#close-btn").addEventListener("click", toggle);
   $panel("#select-btn").addEventListener("click", toggleSelect);
-  
-  $$panel(".tab").forEach(t => t.addEventListener("click", () => switchTab(t.dataset.tab)));
-  
-  document.addEventListener("keydown", e => {
+
+  $$panel(".tab").forEach((t) =>
+    t.addEventListener("click", () => switchTab(t.dataset.tab)),
+  );
+
+  document.addEventListener("keydown", (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === ".") {
       e.preventDefault();
       toggle();
     }
     if (e.key === "Escape") {
-      State.selectMode ? toggleSelect() : State.panelOpen && toggle();
+      if (State.isolatedComponent) {
+        disableIsolation();
+      } else if (State.selectMode) {
+        toggleSelect();
+      } else if (State.panelOpen) {
+        toggle();
+      }
     }
-    if (e.key === "s" && State.panelOpen && !e.target.matches("input,textarea")) {
+    // Check if focus is in an input (either in light DOM or shadow DOM)
+    const activeEl = document.activeElement;
+    const shadowActive = State.shadowRoot?.activeElement;
+    const isInputFocused =
+      activeEl?.matches("input,textarea") ||
+      shadowActive?.matches("input,textarea");
+
+    if (e.key === "s" && State.panelOpen && !isInputFocused) {
       e.preventDefault();
       toggleSelect();
     }
   });
-  
+
   window.addEventListener("message", onMessage);
   State.iframe.addEventListener("load", onIframeLoad);
-  
+
   // Resize
   const handle = $("#resize-handle");
-  handle.addEventListener("mousedown", e => {
+  const widthIndicator = $("#width-indicator");
+  const widthLabel = widthIndicator.querySelector(".width-label");
+
+  handle.addEventListener("mousedown", (e) => {
     e.preventDefault();
     State.isResizing = true;
     document.body.classList.add("resizing");
+    widthIndicator.classList.add("visible");
+    updateWidthIndicator();
   });
-  document.addEventListener("mousemove", e => {
+  document.addEventListener("mousemove", (e) => {
     if (!State.isResizing) return;
     const w = Math.max(MIN_PANEL_WIDTH, window.innerWidth - e.clientX);
     State.panelWidth = w;
     document.documentElement.style.setProperty("--panel-width", w + "px");
+    updateWidthIndicator();
   });
   document.addEventListener("mouseup", () => {
     if (State.isResizing) {
       State.isResizing = false;
       document.body.classList.remove("resizing");
+      widthIndicator.classList.remove("visible");
     }
   });
+
+  function updateWidthIndicator() {
+    const canvas = $("#canvas");
+    const canvasWidth = canvas.offsetWidth;
+    widthLabel.textContent = `${canvasWidth}px`;
+  }
 }
 
 function onIframeLoad() {
@@ -297,9 +342,13 @@ function onIframeLoad() {
     const url = new URL(State.iframe.contentWindow.location.href);
     url.searchParams.delete("__studio_bridge");
     const path = url.pathname + url.search;
-    history.replaceState(null, "", "/__studio" + (path !== "/" ? "?path=" + encodeURIComponent(path) : ""));
+    history.replaceState(
+      null,
+      "",
+      "/__studio" + (path !== "/" ? "?path=" + encodeURIComponent(path) : ""),
+    );
   } catch (e) {}
-  
+
   // If we were waiting for HMR, it's done now
   if (State.pendingToast) {
     dismissToast(State.pendingToast);
@@ -307,6 +356,12 @@ function onIframeLoad() {
     showCanvasLoading(false);
     toast("Changes applied!", "success");
   }
+
+  // Clear selected element since the page changed
+  State.selectedElement = null;
+  renderInspect();
+
+  // Tree refresh is handled by bridge-ready message
 }
 
 // =============================================================================
@@ -329,13 +384,20 @@ function toggleSelect() {
 
 function switchTab(tab) {
   State.activeTab = tab;
-  $$panel(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
-  $$panel(".tab-panel").forEach(p => p.classList.toggle("active", p.dataset.tab === tab));
+  $$panel(".tab").forEach((t) =>
+    t.classList.toggle("active", t.dataset.tab === tab),
+  );
+  $$panel(".tab-panel").forEach((p) =>
+    p.classList.toggle("active", p.dataset.tab === tab),
+  );
   if (tab === "elements") {
     // Show loading state and request tree
     $panel("#tree").innerHTML = `<p class="empty-msg">Loading...</p>`;
-    console.log("[Studio] requesting tree from iframe");
     send({ type: "get-tree" });
+  }
+  if (tab === "components") {
+    // Re-render to get latest on-page status
+    renderComponents();
   }
 }
 
@@ -350,26 +412,78 @@ function send(msg) {
 function onMessage(e) {
   const m = e.data;
   if (!m || typeof m !== "object") return;
-  
+
   switch (m.type) {
-    case "hover": showHighlight(m.rect, m.tagName); break;
-    case "hover-end": $("#highlight").style.display = "none"; break;
-    case "selected": onSelect(m); break;
-    case "tree-data": renderTree(m.tree); break;
-    case "navigate": history.replaceState(null, "", "/__studio?path=" + encodeURIComponent(m.path)); break;
-    case "shortcut": handleShortcut(m.key); break;
+    case "hover":
+      showHighlight(m.rect, m.tagName, m.componentName, m.isComponentRoot);
+      break;
+    case "hover-end":
+      hideHighlight();
+      break;
+    case "selected":
+      onSelect(m);
+      break;
+    case "tree-data":
+      renderTree(m.tree);
+      break;
+    case "navigate":
+      onNavigate(m.path);
+      break;
+    case "shortcut":
+      handleShortcut(m.key);
+      break;
+    case "bridge-ready":
+      onBridgeReady();
+      break;
+    case "components-on-page":
+      onComponentsOnPage(m.components);
+      break;
   }
 }
 
 function handleShortcut(key) {
   if (key === "toggle") toggle();
-  else if (key === "escape") State.selectMode ? toggleSelect() : State.panelOpen && toggle();
+  else if (key === "escape")
+    State.selectMode ? toggleSelect() : State.panelOpen && toggle();
   else if (key === "select" && State.panelOpen) toggleSelect();
 }
 
-function showHighlight(r, tagName) {
+function onNavigate(path) {
+  // Update URL
+  history.replaceState(null, "", "/__studio?path=" + encodeURIComponent(path));
+
+  // Clear selected element since the page changed
+  State.selectedElement = null;
+  renderInspect();
+
+  // For SPA navigation, refresh data immediately (bridge is still loaded)
+  if (State.activeTab === "elements") {
+    send({ type: "get-tree" });
+  }
+  // Always refresh components on page for the Components tab
+  send({ type: "get-components-on-page" });
+}
+
+function onBridgeReady() {
+  // Bridge just loaded on new page - refresh data if needed
+  if (State.activeTab === "elements") {
+    send({ type: "get-tree" });
+  }
+  // Always refresh components on page
+  send({ type: "get-components-on-page" });
+}
+
+function onComponentsOnPage(components) {
+  State.componentsOnPage = components;
+  // Always re-render components list to update button states
+  renderComponents();
+}
+
+function showHighlight(r, tagName, componentName, isComponentRoot) {
   const h = $("#highlight");
   const c = $("#canvas").getBoundingClientRect();
+
+  // Set position and size
   Object.assign(h.style, {
     display: "block",
     left: c.left + r.left + "px",
@@ -377,9 +491,31 @@ function showHighlight(r, tagName) {
     width: r.width + "px",
     height: r.height + "px",
   });
-  if (tagName) {
-    h.querySelector(".highlight-label").textContent = tagName;
+
+  // Set label based on context:
+  // - Component root: just "ComponentName"
+  // - Child inside component: "<tag> in ComponentName"
+  // - Regular element: "<tag>"
+  const label = h.querySelector(".highlight-label");
+  if (componentName && isComponentRoot) {
+    // This is the component itself
+    label.textContent = componentName;
+    h.classList.add("component");
+  } else if (componentName) {
+    // Child element inside a component
+    label.textContent = `<${tagName}> in ${componentName}`;
+    h.classList.add("component");
+  } else {
+    // Regular element, not in a component
+    label.textContent = `<${tagName}>`;
+    h.classList.remove("component");
   }
+}
+
+function hideHighlight() {
+  const h = $("#highlight");
+  h.style.display = "none";
+  h.classList.remove("component");
 }
 
 // =============================================================================
@@ -392,10 +528,11 @@ function onSelect(m) {
     classes: m.classes,
     id: m.id,
     componentName: m.componentName,
+    isComponentRoot: m.isComponentRoot,
     sourceLocation: m.sourceLocation,
     path: m.path,
   };
-  
+
   if (State.selectMode) toggleSelect();
   renderInspect();
   if (State.activeTab !== "inspect") switchTab("inspect");
@@ -405,26 +542,37 @@ function renderInspect() {
   const el = State.selectedElement;
   const empty = $panel("#inspect-empty");
   const content = $panel("#inspect-content");
-  
+
   if (!el) {
     empty.style.display = "";
     content.style.display = "none";
     content.innerHTML = "";
     return;
   }
-  
+
   empty.style.display = "none";
   content.style.display = "block";
-  
-  content.innerHTML = `
-    <div class="selected-card">
-      <div class="selected-header">
-        <span class="tag-badge">&lt;${el.tagName}&gt;</span>
-        ${el.id ? `<span class="id-badge">#${el.id}</span>` : ''}
-      </div>
-      ${el.componentName ? `
-        <div class="component-pill">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+
+  // Check if this element is a component (or inside one)
+  const isInComponent = !!el.componentName;
+  const isComponentRoot = el.isComponentRoot;
+  const isIsolated = State.isolatedComponent?.name === el.componentName;
+  const comp = State.isolatedComponent;
+  const meta = isInComponent
+    ? State.components.find((c) => c.name === el.componentName)
+    : null;
+  const bgColor = isIsolated
+    ? comp?.bgColor
+    : getPreviewBgColor(el.componentName);
+
+  // Build element header based on whether it's a component root or child
+  let elementHeader = "";
+  if (isComponentRoot) {
+    // This IS the component - show component name prominently
+    elementHeader = `
+      <div class="element-header component-root">
+        <div class="component-badge large">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="3" width="7" height="7" rx="1"/>
             <rect x="14" y="3" width="7" height="7" rx="1"/>
             <rect x="3" y="14" width="7" height="7" rx="1"/>
@@ -432,64 +580,220 @@ function renderInspect() {
           </svg>
           ${el.componentName}
         </div>
-      ` : ''}
-      ${el.sourceLocation ? `
-        <div class="source-line">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"/>
-            <polyline points="14,2 14,8 20,8"/>
-          </svg>
-          ${el.sourceLocation}
+        ${
+          el.sourceLocation
+            ? `
+          <div class="source-link">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"/>
+              <polyline points="14,2 14,8 20,8"/>
+            </svg>
+            ${el.sourceLocation}
+          </div>
+        `
+            : ""
+        }
+      </div>
+    `;
+  } else if (isInComponent) {
+    // This is a child element inside a component
+    elementHeader = `
+      <div class="element-header">
+        <div class="element-relationship">
+          <span class="tag-badge">&lt;${el.tagName}&gt;</span>
+          ${el.id ? `<span class="id-badge">#${el.id}</span>` : ""}
+          <span class="inside-label">inside</span>
+          <span class="component-badge">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7" rx="1"/>
+              <rect x="14" y="3" width="7" height="7" rx="1"/>
+              <rect x="3" y="14" width="7" height="7" rx="1"/>
+              <rect x="14" y="14" width="7" height="7" rx="1"/>
+            </svg>
+            ${el.componentName}
+          </span>
         </div>
-      ` : ''}
-    </div>
+        ${
+          el.sourceLocation
+            ? `
+          <div class="source-link">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"/>
+              <polyline points="14,2 14,8 20,8"/>
+            </svg>
+            ${el.sourceLocation}
+          </div>
+        `
+            : ""
+        }
+      </div>
+    `;
+  } else {
+    // Regular element, not in a component
+    elementHeader = `
+      <div class="element-header">
+        <div class="element-tags">
+          <span class="tag-badge">&lt;${el.tagName}&gt;</span>
+          ${el.id ? `<span class="id-badge">#${el.id}</span>` : ""}
+        </div>
+      </div>
+    `;
+  }
+
+  // Build the isolate panel section if this element is in a component
+  let isolateSection = "";
+  if (isInComponent) {
+    // Determine styles label based on what we're editing
+    const stylesTarget = isComponentRoot ? "component" : `<${el.tagName}>`;
+
+    isolateSection = `
+      <div class="panel-section isolate-section ${isIsolated ? "expanded" : ""}">
+        <div class="panel-section-header" id="isolate-section-header">
+          <div class="panel-section-title isolate-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+            Isolate
+          </div>
+          <label class="prop-toggle small">
+            <input type="checkbox" id="isolate-toggle" ${isIsolated ? "checked" : ""}>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        
+        ${
+          isIsolated && meta
+            ? `
+          <div class="panel-section-body">
+            ${
+              !isComponentRoot
+                ? `
+              <div class="isolate-note">
+                Previewing the entire <strong>${el.componentName}</strong> component
+              </div>
+            `
+                : ""
+            }
+            <div class="preview-controls">
+              <div class="control-group">
+                <label class="control-label">Background</label>
+                <div class="bg-color-row">
+                  <input type="color" id="preview-bg-color" value="${bgColor}">
+                  <input type="text" id="preview-bg-hex" class="hex-input" value="${bgColor}" placeholder="#ffffff">
+                  <div class="bg-presets">
+                    <button class="bg-preset" data-color="#ffffff" title="White" style="background: #ffffff;"></button>
+                    <button class="bg-preset" data-color="#f1f5f9" title="Light" style="background: #f1f5f9;"></button>
+                    <button class="bg-preset" data-color="#1e293b" title="Dark" style="background: #1e293b;"></button>
+                    <button class="bg-preset" data-color="#000000" title="Black" style="background: #000000;"></button>
+                  </div>
+                </div>
+              </div>
+              
+              ${
+                meta.props?.length
+                  ? `
+                <div class="control-group">
+                  <label class="control-label">Props</label>
+                  <div class="props-list">
+                    ${meta.props.map((p) => renderPropEditor(p, comp.props[p.name])).join("")}
+                  </div>
+                </div>
+              `
+                  : ""
+              }
+            </div>
+          </div>
+        `
+            : ""
+        }
+      </div>
+    `;
+  }
+
+  // Styles section label changes based on context
+  const stylesLabel = isComponentRoot
+    ? `Classes <span class="styles-target">(on component)</span>`
+    : isInComponent
+      ? `Classes <span class="styles-target">(on &lt;${el.tagName}&gt;)</span>`
+      : "Classes";
+
+  content.innerHTML = `
+    ${elementHeader}
     
-    <div class="section">
-      <label class="section-label">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/>
-          <line x1="7" y1="7" x2="7.01" y2="7"/>
-        </svg>
-        Classes
-      </label>
-      <textarea id="classes-input" spellcheck="false" placeholder="flex items-center gap-4 ...">${el.classes || ''}</textarea>
-      <button id="apply-btn" disabled>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <polyline points="20,6 9,17 4,12"/>
-        </svg>
-        Apply Changes
-      </button>
+    ${isolateSection}
+    
+    <div class="panel-section expanded">
+      <div class="panel-section-header">
+        <div class="panel-section-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/>
+            <line x1="7" y1="7" x2="7.01" y2="7"/>
+          </svg>
+          Styles
+        </div>
+      </div>
+      <div class="panel-section-body">
+        <div class="control-group">
+          <label class="control-label">${stylesLabel}</label>
+          <textarea id="classes-input" spellcheck="false" placeholder="flex items-center gap-4 ...">${el.classes || ""}</textarea>
+          <button id="apply-btn" disabled>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="20,6 9,17 4,12"/>
+            </svg>
+            Apply Changes
+          </button>
+        </div>
+      </div>
     </div>
   `;
-  
+
+  // Bind isolate toggle if present
+  const isolateToggle = $panel("#isolate-toggle");
+  if (isolateToggle) {
+    isolateToggle.addEventListener("change", () => {
+      if (isolateToggle.checked) {
+        enableIsolation(el.componentName);
+      } else {
+        disableIsolation();
+      }
+    });
+  }
+
+  // Bind background color picker if isolation is active
+  if (isIsolated && isInComponent) {
+    bindBgColorEvents();
+    bindPropEditorEvents();
+  }
+
   const applyBtn = $panel("#apply-btn");
   const classesInput = $panel("#classes-input");
-  
+
   // Track what's saved in the filesystem (updates after successful sync)
   // Initialize to current classes if not already set
   if (el.savedClasses === undefined) {
-    el.savedClasses = el.classes || '';
+    el.savedClasses = el.classes || "";
   }
-  
+
   // Update button state and preview when input changes
   function onClassesInput() {
     const newClasses = classesInput.value;
     const hasChanges = newClasses !== el.savedClasses;
     applyBtn.disabled = !hasChanges;
-    
+
     // Instant preview: update element in iframe immediately
     send({ type: "preview-classes", path: el.path, classes: newClasses });
   }
-  
+
   classesInput.addEventListener("input", onClassesInput);
-  
+
   // Apply = sync to filesystem
   applyBtn.addEventListener("click", () => {
     applyBtn.disabled = true; // Optimistically disable
     syncClassesToFile(classesInput.value);
   });
-  
-  classesInput.addEventListener("keydown", e => {
+
+  classesInput.addEventListener("keydown", (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !applyBtn.disabled) {
       e.preventDefault();
       applyBtn.disabled = true; // Optimistically disable
@@ -502,20 +806,20 @@ function renderInspect() {
 function syncClassesToFile(classes) {
   const el = State.selectedElement;
   if (!el) return;
-  
+
   const old = el.savedClasses || "";
-  
+
   if (old) {
     // Store pending classes - will be committed on successful save
     State.pendingClassesSync = classes;
-    
+
     // We have existing classes to search for
     if (el.sourceLocation) {
       // We have exact source location from #[component]
       // Format: /path/to/file.rs:line:column
       const parts = el.sourceLocation.split(":");
       const column = parts.pop(); // remove column
-      const line = parts.pop();   // remove line  
+      const line = parts.pop(); // remove line
       const file = parts.join(":"); // rejoin in case path has colons (Windows)
       if (file && line) {
         State.pendingToast = toast("Saving changes...", "loading");
@@ -523,7 +827,13 @@ function syncClassesToFile(classes) {
         sendWS({
           type: "edit_file",
           file,
-          edits: [{ line: parseInt(line), old_text: `class="${old}"`, new_text: `class="${classes}"` }],
+          edits: [
+            {
+              line: parseInt(line),
+              old_text: `class="${old}"`,
+              new_text: `class="${classes}"`,
+            },
+          ],
         });
       }
     } else {
@@ -548,61 +858,69 @@ function syncClassesToFile(classes) {
 // =============================================================================
 
 // Track expanded state across re-renders
-const expandedNodes = new Set(['0']); // Root always expanded
+const expandedNodes = new Set(["0"]); // Root always expanded
 
 function renderTree(tree) {
   const el = $panel("#tree");
-  if (!tree) { 
-    el.innerHTML = `<p class="empty-msg">Loading...</p>`; 
-    return; 
+  if (!tree) {
+    el.innerHTML = `<p class="empty-msg">Loading...</p>`;
+    return;
   }
-  
+
   el.innerHTML = renderNode(tree, 0);
   bindTreeEvents(el);
 }
 
 function renderNode(n, depth) {
   if (!n) return "";
-  
+
   const hasChildren = n.children && n.children.length > 0;
   const isExpanded = expandedNodes.has(n.path);
   const childCount = n.children?.length || 0;
   const classes = n.classes || [];
-  
+
   // Build the node HTML
   let html = `
     <div class="tree-item" data-path="${n.path}">
       <div class="tree-row" style="--depth:${depth}">
-        ${hasChildren ? `
-          <button class="tree-toggle ${isExpanded ? 'expanded' : ''}" data-path="${n.path}">
+        ${
+          hasChildren
+            ? `
+          <button class="tree-toggle ${isExpanded ? "expanded" : ""}" data-path="${n.path}">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <polyline points="9,18 15,12 9,6"/>
             </svg>
           </button>
-        ` : `<span class="tree-toggle-spacer"></span>`}
-        <span class="tree-tag">&lt;${n.tagName}${n.id ? `<span class="tree-id">#${n.id}</span>` : ''}&gt;</span>
-        ${classes.length ? `<span class="tree-classes">.${classes.join('.')}</span>` : ''}
-        ${n.componentName ? `<span class="tree-comp">${n.componentName}</span>` : ''}
-        ${hasChildren && !isExpanded ? `<span class="tree-count">${childCount}</span>` : ''}
+        `
+            : `<span class="tree-toggle-spacer"></span>`
+        }
+        <span class="tree-tag">&lt;${n.tagName}${n.id ? `<span class="tree-id">#${n.id}</span>` : ""}&gt;</span>
+        ${classes.length ? `<span class="tree-classes">.${classes.join(".")}</span>` : ""}
+        ${n.componentName ? `<span class="tree-comp">${n.componentName}</span>` : ""}
+        ${hasChildren && !isExpanded ? `<span class="tree-count">${childCount}</span>` : ""}
       </div>
-      ${hasChildren ? `
-        <div class="tree-children ${isExpanded ? 'expanded' : ''}" style="--depth:${depth}">
-          ${isExpanded ? n.children.map(c => renderNode(c, depth + 1)).join('') : ''}
+      ${
+        hasChildren
+          ? `
+        <div class="tree-children ${isExpanded ? "expanded" : ""}" style="--depth:${depth}">
+          ${isExpanded ? n.children.map((c) => renderNode(c, depth + 1)).join("") : ""}
         </div>
-      ` : ''}
+      `
+          : ""
+      }
     </div>
   `;
-  
+
   return html;
 }
 
 function bindTreeEvents(el) {
   // Toggle expand/collapse
-  el.querySelectorAll(".tree-toggle").forEach(btn => {
-    btn.addEventListener("click", e => {
+  el.querySelectorAll(".tree-toggle").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
       e.stopPropagation();
       const path = btn.dataset.path;
-      
+
       if (expandedNodes.has(path)) {
         expandedNodes.delete(path);
       } else {
@@ -612,18 +930,20 @@ function bindTreeEvents(el) {
       send({ type: "get-tree" });
     });
   });
-  
+
   // Select node on row click
-  el.querySelectorAll(".tree-row").forEach(row => {
-    row.addEventListener("click", e => {
+  el.querySelectorAll(".tree-row").forEach((row) => {
+    row.addEventListener("click", (e) => {
       if (e.target.closest(".tree-toggle")) return;
       e.stopPropagation();
       const path = row.closest(".tree-item").dataset.path;
-      el.querySelectorAll(".tree-row").forEach(r => r.classList.remove("selected"));
+      el.querySelectorAll(".tree-row").forEach((r) =>
+        r.classList.remove("selected"),
+      );
       row.classList.add("selected");
       send({ type: "select-by-path", path });
     });
-    
+
     // Hover to highlight in preview
     row.addEventListener("mouseenter", () => {
       const path = row.closest(".tree-item").dataset.path;
@@ -650,7 +970,7 @@ async function fetchComponents() {
 function renderComponents() {
   const el = $panel("#components");
   const list = State.components;
-  
+
   if (!list.length) {
     el.innerHTML = `
       <div class="empty-components">
@@ -672,26 +992,426 @@ function renderComponents() {
     `;
     return;
   }
-  
-  el.innerHTML = list.map(c => `
-    <div class="comp-card">
-      <div class="comp-header">
-        <span class="comp-name">${c.name}</span>
-        <code class="comp-src">${c.file}:${c.line}</code>
-      </div>
-      ${c.doc ? `<p class="comp-doc">${c.doc}</p>` : ''}
-      ${c.props?.length ? `
-        <div class="comp-props">
-          ${c.props.map(p => `
-            <div class="prop-row">
-              <span class="prop-name">${p.name}${p.required ? '<span class="req">*</span>' : ''}</span>
-              <span class="prop-type">${p.ty}</span>
-            </div>
-          `).join('')}
+
+  el.innerHTML = list
+    .map((c) => {
+      const onPage = State.componentsOnPage[c.name];
+      const instanceCount = onPage?.length || 0;
+
+      return `
+      <div class="comp-card" data-component="${c.name}">
+        <div class="comp-header">
+          <span class="comp-name">${c.name}</span>
+          <code class="comp-src">${c.file}:${c.line}</code>
         </div>
-      ` : ''}
+        ${c.doc ? `<p class="comp-doc">${c.doc}</p>` : ""}
+        ${
+          c.props?.length
+            ? `
+          <div class="comp-props">
+            ${c.props
+              .map(
+                (p) => `
+              <div class="prop-row">
+                <span class="prop-name">${p.name}${p.required ? '<span class="req">*</span>' : ""}</span>
+                <span class="prop-type">${p.ty}</span>
+              </div>
+            `,
+              )
+              .join("")}
+          </div>
+        `
+            : ""
+        }
+        <div class="comp-actions">
+          <button class="comp-btn isolate-btn" data-component="${c.name}" title="Open in isolation mode">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <path d="M9 3v18"/>
+            </svg>
+            Isolate
+          </button>
+          <button class="comp-btn reveal-btn" data-component="${c.name}" ${instanceCount === 0 ? "disabled" : ""} title="${instanceCount > 0 ? `${instanceCount} instance${instanceCount > 1 ? "s" : ""} on page` : "Not on current page"}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M12 2v4m0 12v4m10-10h-4M6 12H2m15.07-5.07l-2.83 2.83m-4.48 4.48l-2.83 2.83m0-10.14l2.83 2.83m4.48 4.48l2.83 2.83"/>
+            </svg>
+            Reveal${instanceCount > 0 ? ` (${instanceCount})` : ""}
+          </button>
+        </div>
+      </div>
+    `;
+    })
+    .join("");
+
+  // Bind button events
+  bindComponentEvents(el);
+}
+
+function bindComponentEvents(el) {
+  // Reveal button - scroll to component on page
+  el.querySelectorAll(".reveal-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.disabled) return;
+      const name = btn.dataset.component;
+      send({ type: "reveal-component", name });
+      // Switch to inspect tab to show the selected component
+      switchTab("inspect");
+    });
+  });
+
+  // Isolate button - open component in isolation mode
+  el.querySelectorAll(".isolate-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const name = btn.dataset.component;
+      isolateComponent(name);
+    });
+  });
+}
+
+function enableIsolation(name) {
+  // Find component metadata
+  const meta = State.components.find((c) => c.name === name);
+  if (!meta) {
+    toast(`Component "${name}" not found in registry`, "error");
+    return;
+  }
+
+  // Try to load saved props first, otherwise use defaults
+  const savedProps = getPreviewProps(name);
+  const props = {};
+
+  if (meta.props) {
+    meta.props.forEach((p) => {
+      // Use saved value if available
+      if (savedProps && savedProps[p.name] !== undefined) {
+        props[p.name] = savedProps[p.name];
+      } else if (p.default) {
+        // Parse default value based on type
+        props[p.name] = parseDefaultValue(p.default, p.ty);
+      } else if (p.required) {
+        // Set sensible defaults for required props without defaults
+        props[p.name] = getDefaultForType(p.ty);
+      }
+    });
+  }
+
+  // Load saved background color for this component
+  const bgColor = getPreviewBgColor(name);
+
+  State.isolatedComponent = { name, meta, props, bgColor };
+
+  // Show preview iframe, hide main iframe
+  $("#studio").classList.add("isolated");
+
+  // Load the component preview
+  loadComponentPreview();
+
+  // Re-render inspect panel to show isolation controls
+  renderInspect();
+}
+
+function disableIsolation() {
+  State.isolatedComponent = null;
+  $("#studio").classList.remove("isolated");
+  State.previewIframe.src = "";
+  renderInspect();
+}
+
+// Legacy function for Components tab - now goes to inspect with isolation enabled
+function isolateComponent(name) {
+  // First, we need to select the component in the main iframe
+  // Then enable isolation
+  // For now, just enable isolation directly and switch to inspect tab
+  enableIsolation(name);
+  switchTab("inspect");
+}
+
+function loadComponentPreview() {
+  if (!State.isolatedComponent) return;
+
+  const { name, props, bgColor } = State.isolatedComponent;
+  const params = new URLSearchParams();
+
+  // Encode props as query params
+  Object.entries(props).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      params.set(`prop_${key}`, JSON.stringify(value));
+    }
+  });
+
+  // Pass background color
+  if (bgColor) {
+    params.set("__bg", bgColor);
+  }
+
+  State.previewIframe.src = `/__studio/preview/${name}?${params.toString()}`;
+}
+
+function parseDefaultValue(defaultStr, ty) {
+  // Handle common default value formats
+  if (defaultStr === "true") return true;
+  if (defaultStr === "false") return false;
+  if (defaultStr === "None") return null;
+  if (/^\d+$/.test(defaultStr)) return parseInt(defaultStr);
+  if (/^\d+\.\d+$/.test(defaultStr)) return parseFloat(defaultStr);
+  // For enum variants like "ButtonSize::Medium", extract just the variant
+  if (defaultStr.includes("::")) return defaultStr.split("::").pop();
+  // For string literals like "\"text\""
+  if (defaultStr.startsWith('"') && defaultStr.endsWith('"')) {
+    return defaultStr.slice(1, -1);
+  }
+  return defaultStr;
+}
+
+function getDefaultForType(ty) {
+  // Provide sensible defaults for common types
+  if (ty === "bool") return false;
+  if (ty === "&str" || ty === "String") return "Example";
+  if (
+    ty === "i32" ||
+    ty === "i64" ||
+    ty === "u32" ||
+    ty === "u64" ||
+    ty === "usize"
+  )
+    return 0;
+  if (ty === "f32" || ty === "f64") return 0.0;
+  if (ty.startsWith("Option<")) return null;
+  // For enum types, return empty string (will need to select)
+  return "";
+}
+
+function bindBgColorEvents() {
+  const colorInput = $panel("#preview-bg-color");
+  const hexInput = $panel("#preview-bg-hex");
+  const presets = $$panel(".bg-preset");
+
+  function updateBgColor(color) {
+    if (!State.isolatedComponent) return;
+    State.isolatedComponent.bgColor = color;
+    setPreviewBgColor(State.isolatedComponent.name, color);
+    loadComponentPreview();
+
+    // Keep inputs in sync
+    if (colorInput) colorInput.value = color;
+    if (hexInput) hexInput.value = color;
+  }
+
+  if (colorInput) {
+    colorInput.addEventListener("input", () => updateBgColor(colorInput.value));
+  }
+
+  if (hexInput) {
+    hexInput.addEventListener(
+      "input",
+      debounce(() => {
+        const val = hexInput.value.trim();
+        // Validate hex color
+        if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+          updateBgColor(val);
+        }
+      }, 150),
+    );
+  }
+
+  presets.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const color = btn.dataset.color;
+      updateBgColor(color);
+    });
+  });
+}
+
+function renderPropEditor(propMeta, currentValue) {
+  const { name, ty, required, default: defaultVal, doc } = propMeta;
+
+  // Determine input type based on prop type
+  let inputHtml = "";
+
+  if (ty === "bool") {
+    inputHtml = `
+      <label class="prop-toggle">
+        <input type="checkbox" data-prop="${name}" ${currentValue ? "checked" : ""}>
+        <span class="toggle-slider"></span>
+      </label>
+    `;
+  } else if (ty === "&str" || ty === "String") {
+    inputHtml = `
+      <input type="text" class="prop-input" data-prop="${name}" 
+             value="${escapeHtml(currentValue || "")}" 
+             placeholder="${defaultVal || "Enter text..."}">
+    `;
+  } else if (
+    ty === "i32" ||
+    ty === "i64" ||
+    ty === "u32" ||
+    ty === "u64" ||
+    ty === "usize"
+  ) {
+    inputHtml = `
+      <input type="number" class="prop-input" data-prop="${name}" 
+             value="${currentValue ?? ""}" 
+             placeholder="${defaultVal || "0"}">
+    `;
+  } else if (ty === "f32" || ty === "f64") {
+    inputHtml = `
+      <input type="number" step="0.1" class="prop-input" data-prop="${name}" 
+             value="${currentValue ?? ""}" 
+             placeholder="${defaultVal || "0.0"}">
+    `;
+  } else if (ty.startsWith("Option<")) {
+    // Optional prop - add a checkbox to enable/disable
+    const innerType = ty.slice(7, -1); // Extract type from Option<T>
+    const isEnabled = currentValue !== null && currentValue !== undefined;
+    inputHtml = `
+      <div class="optional-prop">
+        <label class="prop-toggle small">
+          <input type="checkbox" data-prop-enabled="${name}" ${isEnabled ? "checked" : ""}>
+          <span class="toggle-slider"></span>
+        </label>
+        <input type="text" class="prop-input" data-prop="${name}" 
+               value="${escapeHtml(currentValue || "")}" 
+               placeholder="None" ${!isEnabled ? "disabled" : ""}>
+      </div>
+    `;
+  } else {
+    // For enum types or unknown types, use text input
+    inputHtml = `
+      <input type="text" class="prop-input" data-prop="${name}" 
+             value="${escapeHtml(currentValue || "")}" 
+             placeholder="${defaultVal || ty}">
+    `;
+  }
+
+  return `
+    <div class="prop-editor-row">
+      <div class="prop-editor-label">
+        <span class="prop-editor-name">${name}${required ? '<span class="req">*</span>' : ""}</span>
+        <span class="prop-editor-type">${ty}</span>
+      </div>
+      ${doc ? `<p class="prop-editor-doc">${doc}</p>` : ""}
+      <div class="prop-editor-input">
+        ${inputHtml}
+      </div>
     </div>
-  `).join('');
+  `;
+}
+
+function bindPropEditorEvents() {
+  // Text/number inputs
+  $$panel(".prop-input").forEach((input) => {
+    input.addEventListener(
+      "input",
+      debounce(() => {
+        const prop = input.dataset.prop;
+        let value = input.value;
+
+        // Convert to appropriate type
+        if (input.type === "number") {
+          value = input.value ? parseFloat(input.value) : null;
+        }
+
+        updateProp(prop, value);
+      }, 150),
+    );
+  });
+
+  // Boolean toggles
+  $$panel('input[type="checkbox"][data-prop]').forEach((input) => {
+    input.addEventListener("change", () => {
+      updateProp(input.dataset.prop, input.checked);
+    });
+  });
+
+  // Optional prop enable/disable
+  $$panel("input[data-prop-enabled]").forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
+      const propName = checkbox.dataset.propEnabled;
+      const valueInput = $panel(`input[data-prop="${propName}"]`);
+      if (valueInput) {
+        valueInput.disabled = !checkbox.checked;
+        if (!checkbox.checked) {
+          updateProp(propName, null);
+        } else {
+          updateProp(propName, valueInput.value || "");
+        }
+      }
+    });
+  });
+}
+
+function updateProp(name, value) {
+  if (!State.isolatedComponent) return;
+  State.isolatedComponent.props[name] = value;
+  // Save props to localStorage
+  setPreviewProps(State.isolatedComponent.name, State.isolatedComponent.props);
+  loadComponentPreview();
+}
+
+function debounce(fn, delay) {
+  let timeout;
+  return (...args) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => fn(...args), delay);
+  };
+}
+
+function escapeHtml(str) {
+  if (typeof str !== "string") return str;
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+// =============================================================================
+// Preview Background Color Storage
+// =============================================================================
+
+const PREVIEW_BG_STORAGE_KEY = "rejoice-studio-preview-bg";
+const PREVIEW_PROPS_STORAGE_KEY = "rejoice-studio-preview-props";
+
+function getPreviewBgColor(componentName) {
+  try {
+    const stored = localStorage.getItem(PREVIEW_BG_STORAGE_KEY);
+    if (stored) {
+      const colors = JSON.parse(stored);
+      return colors[componentName] || "#ffffff";
+    }
+  } catch (e) {}
+  return "#ffffff";
+}
+
+function setPreviewBgColor(componentName, color) {
+  try {
+    const stored = localStorage.getItem(PREVIEW_BG_STORAGE_KEY);
+    const colors = stored ? JSON.parse(stored) : {};
+    colors[componentName] = color;
+    localStorage.setItem(PREVIEW_BG_STORAGE_KEY, JSON.stringify(colors));
+  } catch (e) {}
+}
+
+function getPreviewProps(componentName) {
+  try {
+    const stored = localStorage.getItem(PREVIEW_PROPS_STORAGE_KEY);
+    if (stored) {
+      const allProps = JSON.parse(stored);
+      return allProps[componentName] || null;
+    }
+  } catch (e) {}
+  return null;
+}
+
+function setPreviewProps(componentName, props) {
+  try {
+    const stored = localStorage.getItem(PREVIEW_PROPS_STORAGE_KEY);
+    const allProps = stored ? JSON.parse(stored) : {};
+    allProps[componentName] = props;
+    localStorage.setItem(PREVIEW_PROPS_STORAGE_KEY, JSON.stringify(allProps));
+  } catch (e) {}
 }
 
 // =============================================================================
@@ -700,20 +1420,20 @@ function renderComponents() {
 
 function connectWS() {
   const ws = new WebSocket("ws://localhost:3001/__studio");
-  ws.onopen = () => { 
-    State.wsConnected = true; 
+  ws.onopen = () => {
+    State.wsConnected = true;
   };
-  ws.onerror = e => {
+  ws.onerror = (e) => {
     console.error("[Studio] WebSocket error:", e);
   };
-  ws.onmessage = e => {
+  ws.onmessage = (e) => {
     try {
       const m = JSON.parse(e.data);
       if (m.type === "edit_result") {
         // Dismiss loading toast
         dismissToast(State.pendingToast);
         State.pendingToast = null;
-        
+
         if (m.success) {
           // Commit the pending classes - they're now saved in the filesystem
           if (State.pendingClassesSync !== undefined && State.selectedElement) {
@@ -744,15 +1464,16 @@ function connectWS() {
       }
     } catch (e) {}
   };
-  ws.onclose = () => { 
-    State.wsConnected = false; 
-    setTimeout(connectWS, 2000); 
+  ws.onclose = () => {
+    State.wsConnected = false;
+    setTimeout(connectWS, 2000);
   };
   State.ws = ws;
 }
 
 function sendWS(msg) {
-  if (State.ws?.readyState === WebSocket.OPEN) State.ws.send(JSON.stringify(msg));
+  if (State.ws?.readyState === WebSocket.OPEN)
+    State.ws.send(JSON.stringify(msg));
 }
 
 // =============================================================================
@@ -761,37 +1482,39 @@ function sendWS(msg) {
 
 function toast(msg, type = "success") {
   // Remove existing toasts
-  document.querySelectorAll(".toast").forEach(t => {
+  document.querySelectorAll(".toast").forEach((t) => {
     t.classList.remove("show");
     setTimeout(() => t.remove(), 200);
   });
-  
+
   const t = document.createElement("div");
   t.className = `toast ${type}`;
-  
+
   // Icon based on type
   const icons = {
     success: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20,6 9,17 4,12"/></svg>`,
     error: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
     loading: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="spin"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>`,
   };
-  
+
   t.innerHTML = `
     <span class="toast-icon">${icons[type] || icons.success}</span>
     <span class="toast-msg">${msg}</span>
   `;
-  
+
   document.body.appendChild(t);
-  requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add("show")));
-  
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => t.classList.add("show")),
+  );
+
   // Loading toasts stay until dismissed
   if (type !== "loading") {
-    setTimeout(() => { 
-      t.classList.remove("show"); 
-      setTimeout(() => t.remove(), 200); 
+    setTimeout(() => {
+      t.classList.remove("show");
+      setTimeout(() => t.remove(), 200);
     }, 2500);
   }
-  
+
   return t; // Return so loading toasts can be dismissed
 }
 
@@ -874,6 +1597,38 @@ body.resizing * { transition: none !important; }
   border-radius: inherit; 
   background: white;
   transition: opacity 0.2s ease;
+}
+
+/* Preview iframe for isolation mode */
+#preview-iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  border: none;
+  border-radius: inherit;
+  background: white;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+/* Isolation mode - swap iframes */
+#studio.isolated #iframe {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#studio.isolated #preview-iframe {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Isolated canvas has special border */
+#studio.isolated #canvas {
+  box-shadow: 
+    0 0 0 2px var(--green),
+    0 4px 30px -5px rgba(0,0,0,0.5),
+    0 0 40px -10px rgba(110, 231, 183, 0.3);
 }
 
 /* Loading state */
@@ -967,6 +1722,17 @@ body.resizing * { transition: none !important; }
   white-space: nowrap;
 }
 
+/* Component highlight - green instead of pink */
+#highlight.component {
+  border-color: var(--green);
+  background: linear-gradient(135deg, rgba(110,231,183,0.1), rgba(52,211,153,0.1));
+}
+
+#highlight.component .highlight-label {
+  background: linear-gradient(135deg, #6ee7b7, #34d399);
+  color: #064e3b;
+}
+
 /* ==========================================================================
    Panel (host element only - content is in shadow DOM)
    ========================================================================== */
@@ -1014,6 +1780,59 @@ body.resizing * { transition: none !important; }
 }
 #resize-handle:hover::before { background: var(--border-light); }
 body.resizing #resize-handle::before { background: var(--accent1); }
+
+/* Width indicator */
+#width-indicator {
+  position: fixed;
+  left: 14px;
+  right: calc(var(--panel-width) + 28px);
+  top: 50%;
+  transform: translateY(-50%);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 10001;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+#width-indicator.visible {
+  display: flex;
+  opacity: 1;
+}
+
+.width-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--accent1), var(--accent2));
+}
+
+.width-line::before,
+.width-line::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  width: 1px;
+  height: 9px;
+  background: linear-gradient(180deg, var(--accent1), var(--accent2));
+}
+
+.width-line::before { left: 0; }
+.width-line::after { right: 0; }
+
+.width-label {
+  position: relative;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, var(--bg2), var(--bg));
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  font: 600 13px 'JetBrains Mono', monospace;
+  color: var(--text);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+}
 
 /* ==========================================================================
    Toggle FAB
@@ -1409,90 +2228,217 @@ function getPanelStyles() {
 
 #inspect-content { display: none; }
 
-.selected-card {
+/* Element header - shows tag, id, component name, source */
+.element-header {
+  padding: 14px 16px;
   background: var(--bg3);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 16px;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
 }
 
-.selected-header {
+/* Component root header - more prominent */
+.element-header.component-root {
+  background: linear-gradient(135deg, var(--bg3) 0%, rgba(110, 231, 183, 0.05) 100%);
+  border-color: rgba(110, 231, 183, 0.2);
+}
+
+.element-tags {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: 10px;
 }
 
-.tag-badge {
-  padding: 4px 10px;
-  background: linear-gradient(135deg, rgba(240,171,252,0.15), rgba(129,140,248,0.15));
-  border: 1px solid var(--border-light);
-  border-radius: 6px;
-  font: 600 13px 'JetBrains Mono', monospace;
-  color: var(--accent1);
-}
-
-.id-badge {
-  padding: 4px 10px;
-  background: rgba(252, 211, 77, 0.12);
-  border: 1px solid rgba(252, 211, 77, 0.2);
-  border-radius: 6px;
-  font: 600 12px 'JetBrains Mono', monospace;
-  color: var(--yellow);
-}
-
-.component-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: var(--green-dim);
-  border: 1px solid rgba(110, 231, 183, 0.2);
-  border-radius: var(--radius-sm);
-  font: 500 12px 'Space Grotesk', sans-serif;
-  color: var(--green);
+.element-header:not(.component-root) .element-tags {
   margin-bottom: 8px;
 }
 
-.source-line {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font: 11px 'JetBrains Mono', monospace;
-  color: var(--text3);
-}
-
-.section {
-  margin-bottom: 16px;
-}
-
-.section-label {
+/* Element relationship row - for child elements inside components */
+.element-relationship {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 10px;
-  font: 600 11px 'Space Grotesk', sans-serif;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.element-relationship .tag-badge,
+.element-relationship .id-badge,
+.element-relationship .component-badge {
+  margin-bottom: 0;
+}
+
+.inside-label {
+  font: 500 10px 'Space Grotesk', sans-serif;
   color: var(--text3);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.section-label svg { opacity: 0.6; }
 
-#classes-input {
-  width: 100%;
-  min-height: 90px;
-  padding: 14px;
+.tag-badge {
+  padding: 5px 10px;
+  background: linear-gradient(135deg, rgba(240,171,252,0.12), rgba(129,140,248,0.12));
+  border: 1px solid rgba(240,171,252,0.2);
+  border-radius: 6px;
+  font: 600 11px/1 'JetBrains Mono', monospace;
+  color: var(--accent1);
+}
+
+.id-badge {
+  padding: 5px 10px;
+  background: rgba(252, 211, 77, 0.1);
+  border: 1px solid rgba(252, 211, 77, 0.2);
+  border-radius: 6px;
+  font: 600 11px/1 'JetBrains Mono', monospace;
+  color: var(--yellow);
+}
+
+.component-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: var(--green-dim);
+  border: 1px solid rgba(110, 231, 183, 0.2);
+  border-radius: 6px;
+  font: 600 11px/1 'Space Grotesk', sans-serif;
+  color: var(--green);
+  margin-bottom: 6px;
+}
+
+.component-badge.large {
+  padding: 6px 12px;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.component-badge.large svg {
+  width: 14px;
+  height: 14px;
+}
+
+.source-link {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font: 10px 'JetBrains Mono', monospace;
+  color: var(--text3);
+}
+
+/* Panel sections - collapsible cards */
+.panel-section {
   background: var(--bg2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  font: 12px/1.7 'JetBrains Mono', monospace;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.panel-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: var(--bg3);
+  border-bottom: 1px solid transparent;
+  cursor: default;
+}
+
+.panel-section.expanded .panel-section-header {
+  border-bottom-color: var(--border);
+}
+
+.panel-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 600 11px 'Space Grotesk', sans-serif;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.panel-section-title svg {
+  opacity: 0.5;
+}
+
+.panel-section-body {
+  display: none;
+  padding: 14px;
+}
+
+.panel-section.expanded .panel-section-body {
+  display: block;
+}
+
+/* Isolate section special styling - green title only */
+.isolate-section .isolate-title {
+  color: var(--green);
+}
+
+.isolate-section .isolate-title svg {
+  opacity: 0.8;
+}
+
+/* Note shown when isolating a child element */
+.isolate-note {
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  background: rgba(110, 231, 183, 0.06);
+  border: 1px solid rgba(110, 231, 183, 0.15);
+  border-radius: var(--radius-sm);
+  font: 11px/1.5 'Space Grotesk', sans-serif;
+  color: var(--text3);
+}
+
+.isolate-note strong {
+  color: var(--green);
+  font-weight: 600;
+}
+
+/* Styles target indicator */
+.styles-target {
+  font-weight: 400;
+  color: var(--text3);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* Control groups within sections */
+.control-group {
+  margin-bottom: 16px;
+}
+
+.control-group:last-child {
+  margin-bottom: 0;
+}
+
+.control-label {
+  display: block;
+  margin-bottom: 8px;
+  font: 500 11px 'Space Grotesk', sans-serif;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* Classes textarea */
+#classes-input {
+  width: 100%;
+  min-height: 80px;
+  padding: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font: 12px/1.6 'JetBrains Mono', monospace;
   color: var(--text);
   resize: vertical;
   transition: all 0.15s ease;
 }
+
 #classes-input::placeholder { color: var(--text3); }
+
 #classes-input:focus {
   outline: none;
   border-color: var(--accent1);
@@ -1503,25 +2449,30 @@ function getPanelStyles() {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
-  margin-top: 12px;
-  padding: 12px 20px;
+  margin-top: 10px;
+  padding: 10px 16px;
   background: linear-gradient(135deg, var(--accent1), var(--accent2));
   border: none;
-  border-radius: var(--radius);
-  font: 600 13px 'Space Grotesk', sans-serif;
+  border-radius: var(--radius-sm);
+  font: 600 12px 'Space Grotesk', sans-serif;
   color: var(--void);
   cursor: pointer;
   transition: all 0.2s ease;
 }
+
 #apply-btn:hover:not(:disabled) { 
   transform: translateY(-1px);
   box-shadow: 0 4px 20px -5px var(--accent-glow);
 }
-#apply-btn:active:not(:disabled) { transform: translateY(0) scale(0.98); }
+
+#apply-btn:active:not(:disabled) { 
+  transform: translateY(0) scale(0.98); 
+}
+
 #apply-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
@@ -1741,6 +2692,299 @@ function getPanelStyles() {
 .prop-name { color: var(--text); }
 .prop-name .req { color: var(--red); margin-left: 1px; }
 .prop-type { color: var(--text3); }
+
+/* Component action buttons */
+.comp-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.comp-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font: 500 11px 'Space Grotesk', sans-serif;
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.comp-btn:hover:not(:disabled) {
+  background: var(--bg4);
+  border-color: var(--border-light);
+  color: var(--text);
+}
+
+.comp-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.comp-btn.isolate-btn:hover:not(:disabled) {
+  border-color: var(--accent1);
+  color: var(--accent1);
+}
+
+.comp-btn.reveal-btn:hover:not(:disabled) {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+/* ==========================================================================
+   Preview Controls (in inspect panel)
+   ========================================================================== */
+
+/* Preview controls */
+.preview-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.bg-color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bg-color-row input[type="color"] {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.bg-color-row input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 3px;
+}
+
+.bg-color-row input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 4px;
+}
+
+.hex-input {
+  width: 80px;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font: 11px 'JetBrains Mono', monospace;
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.hex-input:focus {
+  outline: none;
+  border-color: var(--accent1);
+}
+
+.bg-presets {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.bg-preset {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.bg-preset:hover {
+  transform: scale(1.15);
+  border-color: var(--border-light);
+}
+
+.bg-preset[data-color="#ffffff"],
+.bg-preset[data-color="#f1f5f9"] {
+  border-color: var(--border-light);
+}
+
+/* Props list in preview */
+.props-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.no-props-msg {
+  text-align: center;
+  padding: 30px 20px;
+  color: var(--text3);
+}
+
+.no-props-msg p {
+  margin: 0;
+  font-size: 13px;
+}
+
+/* Props editor */
+.props-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.prop-editor-row {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+}
+
+.prop-editor-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+
+.prop-editor-name {
+  font: 500 12px 'Space Grotesk', sans-serif;
+  color: var(--text);
+}
+
+.prop-editor-name .req {
+  color: var(--red);
+  margin-left: 2px;
+}
+
+.prop-editor-type {
+  font: 10px 'JetBrains Mono', monospace;
+  color: var(--text3);
+}
+
+.prop-editor-doc {
+  margin: 0 0 8px;
+  font-size: 10px;
+  color: var(--text3);
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.prop-editor-input {
+  display: flex;
+  align-items: center;
+}
+
+.prop-input {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: 11px 'JetBrains Mono', monospace;
+  color: var(--text);
+  transition: all 0.15s ease;
+}
+
+.prop-input::placeholder {
+  color: var(--text3);
+}
+
+.prop-input:focus {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(110, 231, 183, 0.1);
+}
+
+.prop-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Boolean toggle */
+.prop-toggle {
+  position: relative;
+  display: inline-flex;
+  width: 44px;
+  height: 24px;
+  cursor: pointer;
+}
+
+.prop-toggle.small {
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.prop-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--bg4);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  background: var(--text3);
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.prop-toggle.small .toggle-slider::before {
+  width: 14px;
+  height: 14px;
+  left: 2px;
+}
+
+.prop-toggle input:checked + .toggle-slider {
+  background: linear-gradient(135deg, var(--accent1), var(--accent2));
+  border-color: transparent;
+}
+
+.prop-toggle input:checked + .toggle-slider::before {
+  background: var(--void);
+  transform: translateY(-50%) translateX(20px);
+}
+
+.prop-toggle.small input:checked + .toggle-slider::before {
+  transform: translateY(-50%) translateX(16px);
+}
+
+/* Optional prop with enable toggle */
+.optional-prop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.optional-prop .prop-input {
+  flex: 1;
+}
   `;
 }
 

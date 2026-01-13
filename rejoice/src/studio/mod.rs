@@ -13,6 +13,7 @@ mod websocket;
 pub use file_ops::{EditResult, FileOps};
 pub use protocol::{ClientMessage, Edit, ServerMessage};
 pub use registry::{
-    ComponentMeta, PropMeta, get_all_components, get_component, register_component,
+    ComponentMeta, PreviewFn, PropMeta, get_all_components, get_component, get_preview,
+    register_component, register_preview, render_preview,
 };
 pub use websocket::{get_history_state, handle_studio_socket};
