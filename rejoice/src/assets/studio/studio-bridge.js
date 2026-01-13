@@ -12,6 +12,8 @@
 
 let selectMode = false;
 let lastHover = null;
+let forcedStateElement = null;
+let forcedState = null;
 
 // Messages from host
 window.addEventListener('message', e => {
@@ -90,6 +92,24 @@ window.addEventListener('message', e => {
       }, 800);
       // Also select it
       selectEl(el);
+    }
+  }
+  else if (m.type === 'force-state') {
+    // Force a CSS state (hover, focus, active) on an element for design preview
+    // Clear previous forced state
+    if (forcedStateElement && forcedState) {
+      forcedStateElement.classList.remove(`studio-force-${forcedState}`);
+    }
+    
+    forcedState = m.state; // null, 'hover', 'focus', or 'active'
+    
+    if (m.path && m.state) {
+      forcedStateElement = getByPath(m.path);
+      if (forcedStateElement) {
+        forcedStateElement.classList.add(`studio-force-${m.state}`);
+      }
+    } else {
+      forcedStateElement = null;
     }
   }
 });
@@ -287,6 +307,24 @@ s.textContent = `
   }
   html.studio-select #studio-select-overlay {
     display: block;
+  }
+  
+  /* Forced state classes - these apply the same styles as the pseudo-classes
+     Note: Tailwind v4 uses CSS layers, so we need to ensure these selectors
+     have higher specificity. The classes are applied dynamically when
+     a state is "forced" in the design tools. */
+  .studio-force-hover {
+    /* Indicator that hover state is forced */
+    outline: 2px dashed rgba(110, 231, 183, 0.5) !important;
+    outline-offset: 2px !important;
+  }
+  .studio-force-focus {
+    outline: 2px dashed rgba(129, 140, 248, 0.5) !important;
+    outline-offset: 2px !important;
+  }
+  .studio-force-active {
+    outline: 2px dashed rgba(240, 171, 252, 0.5) !important;
+    outline-offset: 2px !important;
   }
 `;
 document.head.appendChild(s);

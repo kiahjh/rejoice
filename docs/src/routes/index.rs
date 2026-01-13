@@ -42,7 +42,7 @@ pub async fn get(req: Req, res: Res) -> Res {
 
                     // Title
                     h1 class="mb-8" {
-                        span class="block text-5xl md:text-7xl font-semibold mb-2" style="color: var(--ink-bright); letter-spacing: -0.03em; font-family: Inter, sans-serif;" { 
+                        span class="block md:text-7xl font-semibold mb-2 text-5xl" style="color: var(--ink-bright); letter-spacing: -0.03em; font-family: Inter, sans-serif;" { 
                             "Build web apps" 
                         }
                         span class="hero-title-accent text-5xl md:text-7xl" { "with joy" }

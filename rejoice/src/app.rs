@@ -141,9 +141,11 @@ async fn studio_host_handler() -> axum::response::Html<String> {
     <title>Rejoice Studio</title>
 </head>
 <body>
+    <script>window.__REJOICE_VERSION__ = "{}";</script>
     <script>{}</script>
 </body>
 </html>"#,
+        env!("CARGO_PKG_VERSION"),
         STUDIO_HOST_SCRIPT
     );
     axum::response::Html(html)
