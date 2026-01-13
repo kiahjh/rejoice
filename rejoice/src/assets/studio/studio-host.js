@@ -376,6 +376,9 @@ function toggle() {
 }
 
 function toggleSelect() {
+  // Don't allow select mode when isolated
+  if (State.isolatedComponent) return;
+  
   State.selectMode = !State.selectMode;
   $panel("#select-btn").classList.toggle("active", State.selectMode);
   $("#studio").classList.toggle("selecting", State.selectMode);
@@ -1110,6 +1113,10 @@ function enableIsolation(name) {
 
   // Show preview iframe, hide main iframe
   $("#studio").classList.add("isolated");
+  
+  // Disable select mode and button when isolated
+  if (State.selectMode) toggleSelect();
+  $panel("#select-btn").disabled = true;
 
   // Load the component preview (this triggers enum registration on the server)
   loadComponentPreview();
@@ -1135,6 +1142,7 @@ function enableIsolation(name) {
 function disableIsolation() {
   State.isolatedComponent = null;
   $("#studio").classList.remove("isolated");
+  $panel("#select-btn").disabled = false;
   State.previewIframe.src = "";
   renderInspect();
 }
@@ -2074,6 +2082,11 @@ function getPanelStyles() {
   border-color: var(--accent1);
   color: var(--accent1);
 }
+.tool-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
 .tool-label { display: inline; }
 
 #close-btn {
@@ -2701,8 +2714,6 @@ function getPanelStyles() {
 }
 .comp-card:hover { 
   border-color: var(--border-light);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px -10px rgba(0,0,0,0.3);
 }
 
 .comp-header { 

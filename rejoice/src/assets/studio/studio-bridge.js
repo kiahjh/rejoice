@@ -101,17 +101,42 @@ function validEl(el) {
   if (el.id === 'studio-select-overlay') return null;
   const t = el.tagName?.toLowerCase();
   if (!t || t === 'script' || t === 'style' || t === 'link' || t === 'meta') return null;
+  
+  // For SVG child elements (path, rect, circle, etc.), walk up to the <svg> element
+  // or to the first HTML element parent, whichever comes first
+  if (el instanceof SVGElement && t !== 'svg') {
+    let cur = el.parentElement;
+    while (cur && cur !== document.body) {
+      if (cur.tagName.toLowerCase() === 'svg' || !(cur instanceof SVGElement)) {
+        return cur;
+      }
+      cur = cur.parentElement;
+    }
+    return null;
+  }
+  
   return el;
+}
+
+// Helper to get dataset property, works for both HTML and SVG elements
+function getDataAttr(el, name) {
+  if (!el) return null;
+  // HTML elements have dataset
+  if (el.dataset) return el.dataset[name] || null;
+  // SVG elements need getAttribute
+  return el.getAttribute?.(`data-${name}`) || null;
 }
 
 function selectEl(el) {
   let comp = null, src = null, compRoot = null, cur = el;
   while (cur && cur !== document.body) {
-    if (cur.dataset?.component) {
-      comp = cur.dataset.component;
+    const compAttr = getDataAttr(cur, 'component');
+    if (compAttr) {
+      comp = compAttr;
       compRoot = cur; // The element that has data-component
     }
-    if (cur.dataset?.source) src = cur.dataset.source;
+    const srcAttr = getDataAttr(cur, 'source');
+    if (srcAttr) src = srcAttr;
     if (comp && src) break;
     cur = cur.parentElement;
   }
@@ -119,11 +144,22 @@ function selectEl(el) {
   // The macro wraps component content in a div with data-component, so the "root"
   // from the user's perspective is actually the first child of that wrapper.
   // We consider it "root" if: the element itself has data-component, OR its parent does.
-  const isComponentRoot = !!el.dataset?.component || !!el.parentElement?.dataset?.component;
+  const isComponentRoot = !!getDataAttr(el, 'component') || !!getDataAttr(el.parentElement, 'component');
+  
+  // Get className safely (SVG elements have className as SVGAnimatedString)
+  let classes = '';
+  if (typeof el.className === 'string') {
+    classes = el.className;
+  } else if (el.className?.baseVal) {
+    classes = el.className.baseVal;
+  } else if (el.getAttribute) {
+    classes = el.getAttribute('class') || '';
+  }
+  
   post({
     type: 'selected',
     tagName: el.tagName.toLowerCase(),
-    classes: el.className || '',
+    classes,
     id: el.id || null,
     componentName: comp,
     isComponentRoot,
@@ -168,6 +204,7 @@ function buildTree(el, path, depth) {
   if (!el?.tagName || depth > 12) return null;
   const t = el.tagName.toLowerCase();
   if (t === 'script' || t === 'style' || t === 'svg') return null; // Skip SVGs for now
+  if (el.id === 'studio-select-overlay') return null; // Skip studio overlay
   
   // Get className safely (SVG elements have className as SVGAnimatedString)
   let classStr = '';
