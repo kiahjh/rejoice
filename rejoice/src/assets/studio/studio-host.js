@@ -15,6 +15,7 @@ const State = {
   selectedElement: null,
   components: [],
   componentsOnPage: {}, // { componentName: [path1, path2, ...] }
+  enumVariants: {}, // { typeName: ["Variant1", "Variant2", ...] }
   ws: null,
   wsConnected: false,
   activeTab: "inspect",
@@ -961,10 +962,16 @@ function bindTreeEvents(el) {
 
 async function fetchComponents() {
   try {
-    const r = await fetch("/__studio/registry");
-    State.components = (await r.json()).components || [];
+    const [registryRes, enumsRes] = await Promise.all([
+      fetch("/__studio/registry"),
+      fetch("/__studio/enums"),
+    ]);
+    State.components = (await registryRes.json()).components || [];
+    State.enumVariants = (await enumsRes.json()) || {};
     renderComponents();
-  } catch (e) {}
+  } catch (e) {
+    console.error("Failed to fetch components:", e);
+  }
 }
 
 function renderComponents() {
@@ -1104,11 +1111,25 @@ function enableIsolation(name) {
   // Show preview iframe, hide main iframe
   $("#studio").classList.add("isolated");
 
-  // Load the component preview
+  // Load the component preview (this triggers enum registration on the server)
   loadComponentPreview();
 
   // Re-render inspect panel to show isolation controls
   renderInspect();
+  
+  // After a brief delay, re-fetch enums (they get registered when preview is rendered)
+  // and re-render to show dropdowns for any enum props
+  setTimeout(async () => {
+    try {
+      const res = await fetch("/__studio/enums");
+      const newEnums = await res.json();
+      // Only re-render if we got new enum types
+      if (Object.keys(newEnums).length > Object.keys(State.enumVariants).length) {
+        State.enumVariants = newEnums;
+        renderInspect();
+      }
+    } catch (e) {}
+  }, 500);
 }
 
 function disableIsolation() {
@@ -1118,11 +1139,25 @@ function disableIsolation() {
   renderInspect();
 }
 
-// Legacy function for Components tab - now goes to inspect with isolation enabled
+// Called from Components tab - creates a synthetic selection and enables isolation
 function isolateComponent(name) {
-  // First, we need to select the component in the main iframe
-  // Then enable isolation
-  // For now, just enable isolation directly and switch to inspect tab
+  const meta = State.components.find((c) => c.name === name);
+  if (!meta) {
+    toast(`Component "${name}" not found in registry`, "error");
+    return;
+  }
+  
+  // Create a synthetic selected element for the component
+  State.selectedElement = {
+    tagName: "div",
+    classes: "",
+    id: null,
+    componentName: name,
+    isComponentRoot: true,
+    sourceLocation: `${meta.file}:${meta.line}:${meta.column}`,
+    path: null,
+  };
+  
   enableIsolation(name);
   switchTab("inspect");
 }
@@ -1275,8 +1310,17 @@ function renderPropEditor(propMeta, currentValue) {
                placeholder="None" ${!isEnabled ? "disabled" : ""}>
       </div>
     `;
+  } else if (State.enumVariants[ty]) {
+    // Enum type with known variants - use dropdown
+    const variants = State.enumVariants[ty];
+    const selectedValue = currentValue || variants[0] || "";
+    inputHtml = `
+      <select class="prop-select" data-prop="${name}">
+        ${variants.map(v => `<option value="${v}" ${v === selectedValue ? 'selected' : ''}>${v}</option>`).join('')}
+      </select>
+    `;
   } else {
-    // For enum types or unknown types, use text input
+    // For unknown types, use text input
     inputHtml = `
       <input type="text" class="prop-input" data-prop="${name}" 
              value="${escapeHtml(currentValue || "")}" 
@@ -1337,6 +1381,13 @@ function bindPropEditorEvents() {
           updateProp(propName, valueInput.value || "");
         }
       }
+    });
+  });
+
+  // Select dropdowns (for enums)
+  $$panel(".prop-select").forEach((select) => {
+    select.addEventListener("change", () => {
+      updateProp(select.dataset.prop, select.value);
     });
   });
 }
@@ -2910,6 +2961,36 @@ function getPanelStyles() {
 .prop-input:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Enum select dropdown */
+.prop-select {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: 11px 'JetBrains Mono', monospace;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 30px;
+}
+
+.prop-select:focus {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(110, 231, 183, 0.1);
+}
+
+.prop-select option {
+  background: var(--bg2);
+  color: var(--text);
+  padding: 8px;
 }
 
 /* Boolean toggle */

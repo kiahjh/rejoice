@@ -49,6 +49,7 @@ impl App {
         // Add Studio endpoints in dev mode
         if dev_mode {
             router = router.route("/__studio/registry", get(studio_registry_handler));
+            router = router.route("/__studio/enums", get(studio_enums_handler));
         }
 
         // Add Studio host page when in studio mode
@@ -297,6 +298,10 @@ async fn studio_registry_handler() -> Json<RegistryResponse> {
     Json(RegistryResponse {
         components: json_components,
     })
+}
+
+async fn studio_enums_handler() -> Json<std::collections::HashMap<String, Vec<String>>> {
+    Json(crate::studio::get_all_prop_enums())
 }
 
 const LIVE_RELOAD_SCRIPT: &str = concat!(

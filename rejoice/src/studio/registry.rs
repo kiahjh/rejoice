@@ -48,12 +48,20 @@ static REGISTRY: OnceLock<RwLock<HashMap<&'static str, ComponentMeta>>> = OnceLo
 /// Global preview function registry.
 static PREVIEW_REGISTRY: OnceLock<RwLock<HashMap<&'static str, PreviewFn>>> = OnceLock::new();
 
+/// Global PropEnum variants registry - maps type name to list of variant names.
+static PROP_ENUM_REGISTRY: OnceLock<RwLock<HashMap<&'static str, &'static [&'static str]>>> =
+    OnceLock::new();
+
 fn get_registry() -> &'static RwLock<HashMap<&'static str, ComponentMeta>> {
     REGISTRY.get_or_init(|| RwLock::new(HashMap::new()))
 }
 
 fn get_preview_registry() -> &'static RwLock<HashMap<&'static str, PreviewFn>> {
     PREVIEW_REGISTRY.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+fn get_prop_enum_registry() -> &'static RwLock<HashMap<&'static str, &'static [&'static str]>> {
+    PROP_ENUM_REGISTRY.get_or_init(|| RwLock::new(HashMap::new()))
 }
 
 /// Register a component in the global registry.
@@ -98,6 +106,37 @@ pub fn get_all_components() -> Vec<ComponentMeta> {
         .read()
         .ok()
         .map(|r| r.values().cloned().collect())
+        .unwrap_or_default()
+}
+
+/// Register a PropEnum type and its variants.
+///
+/// This is called automatically by the `#[derive(PropEnum)]` macro in debug builds.
+pub fn register_prop_enum(type_name: &'static str, variants: &'static [&'static str]) {
+    if let Ok(mut registry) = get_prop_enum_registry().write() {
+        registry.insert(type_name, variants);
+    }
+}
+
+/// Get variants for a PropEnum type by name.
+pub fn get_prop_enum_variants(type_name: &str) -> Option<&'static [&'static str]> {
+    get_prop_enum_registry()
+        .read()
+        .ok()?
+        .get(type_name)
+        .copied()
+}
+
+/// Get all registered PropEnum types and their variants.
+pub fn get_all_prop_enums() -> HashMap<String, Vec<String>> {
+    get_prop_enum_registry()
+        .read()
+        .ok()
+        .map(|r| {
+            r.iter()
+                .map(|(k, v)| (k.to_string(), v.iter().map(|s| s.to_string()).collect()))
+                .collect()
+        })
         .unwrap_or_default()
 }
 

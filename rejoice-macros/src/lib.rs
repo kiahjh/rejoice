@@ -370,14 +370,18 @@ fn generate_prop_parser(
                 quote! { #storage_name },
             )
         } else {
-            // No default - try PropEnum pattern, but this may fail to compile
-            // which is intentional - it tells the user they need to add a default
+            // No default - try PropEnum pattern
+            // Use the first variant as fallback if no value provided
             (
                 quote! {
                     let #storage_name: #ty = __props.get(#param_name)
                         .and_then(|s| rejoice::serde_json::from_str::<String>(s).ok())
                         .and_then(|s| #ty::prop_enum_from_name(&s))
-                        .expect(concat!("Prop '", #param_name, "' requires #[derive(PropEnum)] or #[prop(default = ...)]"));
+                        .unwrap_or_else(|| {
+                            // Fall back to first variant
+                            #ty::prop_enum_from_name(#ty::prop_enum_variants()[0])
+                                .expect("PropEnum should have at least one variant")
+                        });
                 },
                 quote! { #storage_name },
             )
@@ -909,16 +913,30 @@ pub fn derive_prop_enum(input: TokenStream) -> TokenStream {
 
     let variant_names: Vec<_> = variants.iter().map(|v| &v.ident).collect();
     let variant_strings: Vec<_> = variant_names.iter().map(|v| v.to_string()).collect();
+    let type_name_str = name.to_string();
 
     let output = quote! {
         impl #name {
             /// Returns a list of all variant names as strings.
             pub fn prop_enum_variants() -> &'static [&'static str] {
+                // Register this enum type when first accessed (debug builds only)
+                #[cfg(debug_assertions)]
+                {
+                    use std::sync::Once;
+                    static REGISTER: Once = Once::new();
+                    REGISTER.call_once(|| {
+                        rejoice::studio::register_prop_enum(#type_name_str, &[#(#variant_strings),*]);
+                    });
+                }
                 &[#(#variant_strings),*]
             }
 
             /// Construct a variant from its string name.
             pub fn prop_enum_from_name(name: &str) -> Option<Self> {
+                // Ensure enum is registered (calls prop_enum_variants which handles registration)
+                #[cfg(debug_assertions)]
+                let _ = Self::prop_enum_variants();
+
                 match name {
                     #(#variant_strings => Some(Self::#variant_names),)*
                     _ => None,
@@ -930,6 +948,12 @@ pub fn derive_prop_enum(input: TokenStream) -> TokenStream {
                 match self {
                     #(Self::#variant_names => #variant_strings,)*
                 }
+            }
+
+            /// Register this enum's variants in the Studio registry (debug builds only).
+            #[cfg(debug_assertions)]
+            pub fn __register_prop_enum() {
+                rejoice::studio::register_prop_enum(#type_name_str, Self::prop_enum_variants());
             }
         }
     };
