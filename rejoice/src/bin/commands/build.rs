@@ -4,28 +4,12 @@ use colored::Colorize;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
-fn run_npm_command(args: &[&str]) -> std::io::Result<std::process::ExitStatus> {
-    // Run npm through a shell to ensure proper PATH resolution
-    // This handles cases where npm is installed via nvm or in user-specific locations
-    #[cfg(not(windows))]
-    {
-        let npm_cmd = format!("npm {}", args.join(" "));
-        Command::new("sh")
-            .args(["-c", &npm_cmd])
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .status()
-    }
-
-    #[cfg(windows)]
-    {
-        let npm_cmd = format!("npm {}", args.join(" "));
-        Command::new("cmd")
-            .args(["/C", &npm_cmd])
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .status()
-    }
+fn run_bun_command(args: &[&str]) -> std::io::Result<std::process::ExitStatus> {
+    Command::new("bun")
+        .args(args)
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status()
 }
 
 pub fn build_command(release: bool) {
@@ -40,8 +24,8 @@ pub fn build_command(release: bool) {
 
     // Determine total steps:
     // - No client dir: just cargo build (1 step)
-    // - Client dir with islands: npm install, generate islands, build assets, cargo build (4 steps)
-    // - Client dir without islands: npm install, build assets, cargo build (3 steps)
+    // - Client dir with islands: bun install, generate islands, build assets, cargo build (4 steps)
+    // - Client dir without islands: bun install, build assets, cargo build (3 steps)
     let total_steps = if !has_client {
         1
     } else if has_islands {
@@ -51,18 +35,18 @@ pub fn build_command(release: bool) {
     };
     let mut step = 1;
 
-    // Step 1: Install npm dependencies if needed
+    // Step 1: Install dependencies if needed
     if has_client {
         if !Path::new("node_modules").exists() {
-            style::print_step(step, total_steps, "Installing npm dependencies...");
-            let status = run_npm_command(&["install"]);
+            style::print_step(step, total_steps, "Installing dependencies...");
+            let status = run_bun_command(&["install"]);
 
             if status.is_err() || !status.unwrap().success() {
-                style::print_error("Failed to run npm install");
+                style::print_error("Failed to run bun install");
                 std::process::exit(1);
             }
         } else {
-            style::print_step(step, total_steps, "npm dependencies already installed");
+            style::print_step(step, total_steps, "Dependencies already installed");
         }
         step += 1;
 
@@ -79,17 +63,8 @@ pub fn build_command(release: bool) {
         // Step 3 (or 2): Build client assets with Vite
         style::print_step(step, total_steps, "Building client assets...");
 
-        // Run npm build through shell for proper PATH resolution
-        #[cfg(not(windows))]
-        let vite_status = Command::new("sh")
-            .args(["-c", "npm run build"])
-            .stdout(Stdio::null())
-            .stderr(Stdio::inherit())
-            .status();
-
-        #[cfg(windows)]
-        let vite_status = Command::new("cmd")
-            .args(["/C", "npm run build"])
+        let vite_status = Command::new("bun")
+            .args(["run", "build"])
             .stdout(Stdio::null())
             .stderr(Stdio::inherit())
             .status();

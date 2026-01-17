@@ -1,3 +1,4 @@
+use super::boilerplate::maybe_generate_boilerplate;
 use super::islands::{generate_islands_registry, generate_vite_config, has_island_components};
 use super::style;
 use axum::{
@@ -11,31 +12,19 @@ use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
 
-fn run_npm_command(args: &[&str]) -> std::io::Result<std::process::ExitStatus> {
-    // Run npm through a shell to ensure proper PATH resolution
-    // This handles cases where npm is installed via nvm or in user-specific locations
-    #[cfg(not(windows))]
-    {
-        let npm_cmd = format!("npm {}", args.join(" "));
-        Command::new("sh")
-            .args(["-c", &npm_cmd])
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .status()
-    }
+// Global to track the child process ID for signal handler
+static CHILD_PID: AtomicU32 = AtomicU32::new(0);
 
-    #[cfg(windows)]
-    {
-        let npm_cmd = format!("npm {}", args.join(" "));
-        Command::new("cmd")
-            .args(["/C", &npm_cmd])
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .status()
-    }
+fn run_bun_command(args: &[&str]) -> std::io::Result<std::process::ExitStatus> {
+    Command::new("bun")
+        .args(args)
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status()
 }
 
 pub fn dev_command() {
@@ -69,8 +58,51 @@ async fn run_dev_server() {
     style::print_compiling();
     let mut child = start_app();
 
-    // Run the watch loop
+    // Set up Ctrl+C handler to clean up child process
+    let ctrl_c_handler = tokio::spawn(async {
+        tokio::signal::ctrl_c().await.ok();
+        cleanup_child_process();
+        std::process::exit(0);
+    });
+
+    // Run the watch loop (this blocks)
     run_watch_loop(watcher, &mut child, has_client, reload_tx);
+
+    // Clean up if we exit normally
+    ctrl_c_handler.abort();
+    cleanup_child_process();
+}
+
+/// Kill the child process and its descendants
+fn cleanup_child_process() {
+    let pid = CHILD_PID.load(Ordering::SeqCst);
+    if pid == 0 {
+        return;
+    }
+
+    #[cfg(unix)]
+    {
+        // Kill the entire process group (negative PID)
+        unsafe {
+            libc::kill(-(pid as i32), libc::SIGTERM);
+        }
+        // Give it a moment to terminate gracefully
+        std::thread::sleep(Duration::from_millis(100));
+        // Force kill if still running
+        unsafe {
+            libc::kill(-(pid as i32), libc::SIGKILL);
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        // On Windows, just kill the process (child processes may still linger)
+        let _ = Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
 }
 
 fn setup_client_build() {
@@ -84,18 +116,18 @@ fn setup_client_build() {
         println!(
             "{} {}",
             "→".blue().bold(),
-            "Installing npm dependencies...".white()
+            "Installing dependencies...".white()
         );
-        let status = run_npm_command(&["install"]);
+        let status = run_bun_command(&["install"]);
 
         match status {
             Err(e) => {
-                style::print_error(&format!("Failed to run npm install: {}", e));
+                style::print_error(&format!("Failed to run bun install: {}", e));
                 std::process::exit(1);
             }
             Ok(s) if !s.success() => {
                 style::print_error(&format!(
-                    "npm install failed with exit code {}",
+                    "bun install failed with exit code {}",
                     s.code()
                         .map(|c| c.to_string())
                         .unwrap_or_else(|| "unknown".to_string())
@@ -184,7 +216,22 @@ fn run_watch_loop(
             Ok(Ok(event)) => {
                 use notify::EventKind::*;
                 match event.kind {
-                    Create(_) | Modify(_) | Remove(_) => {
+                    Create(_) => {
+                        // Check for new route files and generate boilerplate
+                        for path in &event.paths {
+                            maybe_generate_boilerplate(path);
+                        }
+                        if last_restart.elapsed() > debounce_duration {
+                            handle_file_change(
+                                &event,
+                                child,
+                                has_islands,
+                                &reload_tx,
+                                &mut last_restart,
+                            );
+                        }
+                    }
+                    Modify(_) | Remove(_) => {
                         if last_restart.elapsed() > debounce_duration {
                             handle_file_change(
                                 &event,
@@ -277,7 +324,8 @@ fn handle_rust_change(
 
     style::print_compiling();
 
-    let _ = child.kill();
+    // Kill the old process group
+    cleanup_child_process();
     let _ = child.wait();
 
     *child = start_app();
@@ -291,34 +339,51 @@ fn handle_rust_change(
 }
 
 fn run_vite_build() {
-    // Run npm build through shell for proper PATH resolution
-    #[cfg(not(windows))]
+    let _ = Command::new("bun")
+        .args(["run", "build"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::inherit())
+        .status();
+}
+
+fn start_app() -> Child {
+    #[cfg(unix)]
     {
-        let _ = Command::new("sh")
-            .args(["-c", "npm run build"])
-            .stdout(Stdio::null())
-            .stderr(Stdio::inherit())
-            .status();
+        use std::os::unix::process::CommandExt;
+        let child = unsafe {
+            Command::new("cargo")
+                .args(["run", "--quiet"])
+                .env("REJOICE_DEV", "1")
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .pre_exec(|| {
+                    // Create a new process group so we can kill all children
+                    libc::setpgid(0, 0);
+                    Ok(())
+                })
+                .spawn()
+                .expect("Failed to start cargo run")
+        };
+        CHILD_PID.store(child.id(), Ordering::SeqCst);
+        child
     }
 
     #[cfg(windows)]
     {
-        let _ = Command::new("cmd")
-            .args(["/C", "npm run build"])
-            .stdout(Stdio::null())
+        use std::os::windows::process::CommandExt;
+        // CREATE_NEW_PROCESS_GROUP (0x00000200) allows us to send Ctrl+C to the group
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
+        let child = Command::new("cargo")
+            .args(["run", "--quiet"])
+            .env("REJOICE_DEV", "1")
+            .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
-            .status();
+            .creation_flags(CREATE_NEW_PROCESS_GROUP)
+            .spawn()
+            .expect("Failed to start cargo run");
+        CHILD_PID.store(child.id(), Ordering::SeqCst);
+        child
     }
-}
-
-fn start_app() -> Child {
-    Command::new("cargo")
-        .args(["run", "--quiet"])
-        .env("REJOICE_DEV", "1")
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .expect("Failed to start cargo run")
 }
 
 // WebSocket reload server
@@ -332,11 +397,19 @@ async fn run_reload_server(reload_tx: Arc<broadcast::Sender<&'static str>>) {
         }),
     );
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3001")
-        .await
-        .expect("Failed to bind reload server");
+    let listener = match tokio::net::TcpListener::bind("127.0.0.1:3001").await {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!(
+                "  {} Live reload unavailable (port 3001 in use: {})",
+                "!".yellow().bold(),
+                e
+            );
+            return;
+        }
+    };
 
-    axum::serve(listener, app).await.unwrap();
+    let _ = axum::serve(listener, app).await;
 }
 
 async fn handle_reload_socket(socket: WebSocket, mut rx: broadcast::Receiver<&'static str>) {

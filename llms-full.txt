@@ -45,7 +45,7 @@ A Rejoice project has the following structure:
 my-app/
 ├── build.rs                 # Build script for route generation
 ├── Cargo.toml               # Rust dependencies
-├── package.json             # Node.js dependencies (Vite, Tailwind, SolidJS)
+├── package.json             # Dependencies (Vite, Tailwind, SolidJS) - uses Bun
 ├── vite.config.ts           # Vite configuration
 ├── tsconfig.json            # TypeScript configuration
 ├── .env                     # Environment variables (if using database)
@@ -96,15 +96,21 @@ rejoice init
 
 Starts the development server with:
 - Automatic Rust recompilation on file changes
-- Vite watch mode for client assets
+- Vite watch mode for client assets (via Bun)
 - WebSocket-based live reload
 - Hot module replacement for Rust and client changes
+- Auto-generates boilerplate for new route/layout files
 
 ```bash
 rejoice dev
 # Server runs at http://localhost:8080
 # Live reload WebSocket at ws://localhost:3001/__reload
 ```
+
+When you create a new `.rs` file in `src/routes/` while the dev server is running, it automatically populates the file with appropriate boilerplate:
+- Detects if your app uses state (from `main.rs`)
+- Generates layout boilerplate for `layout.rs` files
+- Includes `Path` extraction for dynamic route files like `[id].rs`
 
 ### `rejoice build [--release]`
 
@@ -119,7 +125,7 @@ rejoice build --release
 ```
 
 Build steps:
-1. Install npm dependencies (if `node_modules/` doesn't exist)
+1. Install dependencies with Bun (if `node_modules/` doesn't exist)
 2. Generate islands registry (if islands exist in `client/`)
 3. Build client assets with Vite
 4. Compile Rust binary
@@ -127,6 +133,26 @@ Build steps:
 Output:
 - Binary: `target/debug/<name>` or `target/release/<name>`
 - Client assets: `dist/islands.js`, `dist/styles.css`
+
+### `rejoice migrate <action>`
+
+Database migrations powered by sqlx-cli.
+
+```bash
+# Create a new reversible migration (generates up.sql and down.sql)
+rejoice migrate add create_users_table
+
+# Apply pending migrations
+rejoice migrate up
+
+# Revert the last migration
+rejoice migrate revert
+
+# Show migration status
+rejoice migrate status
+```
+
+If sqlx-cli is not installed, the command will offer to install it automatically.
 
 ---
 
@@ -1019,7 +1045,7 @@ The `rejoice::db` module exports:
 
 ## Dynamic Routes
 
-Dynamic routes use square brackets in the filename: `[param].rs`
+Dynamic routes use square brackets in filenames (`[param].rs`) or directory names (`[param]/`).
 
 ### Basic Dynamic Route
 
@@ -1059,11 +1085,37 @@ pub async fn get(state: AppState, req: Req, res: Res, id: String) -> Res {
 }
 ```
 
+### Dynamic Segments in Directories
+
+Dynamic segments can appear in directory names, allowing nested dynamic routes:
+
+**`src/routes/users/[id]/posts/index.rs`** → `/users/:id/posts`
+
+```rust
+use rejoice::{Req, Res, html};
+
+pub async fn get(req: Req, res: Res, id: String) -> Res {
+    res.html(html! {
+        h1 { "Posts for user: " (id) }
+    })
+}
+```
+
 ### Multiple Dynamic Segments
 
-**`src/routes/orgs/[org_id]/repos/[repo_id].rs`** → `/orgs/:org_id/repos/:repo_id`
+**`src/routes/users/[user_id]/posts/[post_id]/index.rs`** → `/users/:user_id/posts/:post_id`
 
-Note: Currently only single dynamic segments are fully supported per route file.
+```rust
+use rejoice::{Req, Res, html};
+
+pub async fn get(req: Req, res: Res, user_id: String, post_id: String) -> Res {
+    res.html(html! {
+        h1 { "Post " (post_id) " by user " (user_id) }
+    })
+}
+```
+
+Parameters are passed to the handler in the order they appear in the URL path.
 
 ---
 

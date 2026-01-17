@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.0
+
+- **Switched from npm to Bun** - All client-side builds now use Bun for faster installs and builds
+- **Dynamic routes in directories** - You can now use `[param]/` directories for nested dynamic routes (e.g., `users/[id]/posts/` → `/users/:id/posts`)
+- **Multiple dynamic segments** - Routes can have multiple path parameters (e.g., `/users/:user_id/posts/:post_id`)
+- **Database migrations CLI** - New `rejoice migrate` command with `add`, `up`, `revert`, and `status` subcommands (wraps sqlx-cli)
+- **Auto-generated boilerplate** - When the dev server is running, creating a new route or layout file auto-populates it with appropriate boilerplate
+- **Fixed dev server cleanup** - Ctrl+C now properly kills child processes, preventing "address already in use" errors
+- **llms.txt support** - Documentation now follows the llmstxt.org standard for better AI agent integration
+
 ## 0.11.4
 
 - Fixed npm PATH resolution issues - now runs npm commands through shell to properly detect npm installed via nvm or custom locations

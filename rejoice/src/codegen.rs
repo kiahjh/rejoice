@@ -19,7 +19,7 @@ pub fn generate_routes() {
     let mut layouts: HashMap<String, String> = HashMap::new();
     let mut routes: Vec<RouteInfo> = Vec::new();
 
-    collect_layouts_and_routes(routes_dir, "", "", &mut layouts, &mut routes);
+    collect_layouts_and_routes(routes_dir, "", "", &[], &mut layouts, &mut routes);
 
     let routes_rs_path =
         fs::canonicalize("src/routes.rs").expect("Failed to canonicalize src/routes.rs");
@@ -106,7 +106,7 @@ struct RouteInfo {
     url_path: String,
     mod_name: String,
     dir_path: String,
-    param: Option<String>,
+    params: Vec<String>, // All path parameters (from directories and file name)
     methods: Vec<String>,
 }
 
@@ -130,6 +130,7 @@ fn collect_layouts_and_routes(
     dir: &Path,
     url_prefix: &str,
     mod_prefix: &str,
+    accumulated_params: &[String], // Track params from parent directories
     layouts: &mut HashMap<String, String>,
     routes: &mut Vec<RouteInfo>,
 ) {
@@ -147,14 +148,37 @@ fn collect_layouts_and_routes(
         let file_name = path.file_name().unwrap().to_str().unwrap();
 
         if path.is_dir() {
-            let url_segment = file_name.replace('_', "-");
+            // Handle dynamic directory segments like [id]
+            let (dir_mod_name, url_segment, new_param) =
+                if file_name.starts_with('[') && file_name.ends_with(']') {
+                    let param_name = &file_name[1..file_name.len() - 1];
+                    (
+                        format!("param_{}", param_name),
+                        format!(":{}", param_name),
+                        Some(param_name.to_string()),
+                    )
+                } else {
+                    (file_name.to_string(), file_name.replace('_', "-"), None)
+                };
             let new_url_prefix = format!("{}/{}", url_prefix, url_segment);
             let new_mod_prefix = if mod_prefix.is_empty() {
-                file_name.to_string()
+                dir_mod_name
             } else {
-                format!("{}_{}", mod_prefix, file_name)
+                format!("{}_{}", mod_prefix, dir_mod_name)
             };
-            collect_layouts_and_routes(&path, &new_url_prefix, &new_mod_prefix, layouts, routes);
+            // Accumulate params from directory hierarchy
+            let mut new_params = accumulated_params.to_vec();
+            if let Some(p) = new_param {
+                new_params.push(p);
+            }
+            collect_layouts_and_routes(
+                &path,
+                &new_url_prefix,
+                &new_mod_prefix,
+                &new_params,
+                layouts,
+                routes,
+            );
         } else if file_name.ends_with(".rs") && file_name != "mod.rs" {
             let stem = path.file_stem().unwrap().to_str().unwrap();
 
@@ -168,12 +192,12 @@ fn collect_layouts_and_routes(
                 continue;
             }
 
-            let (file_mod_name, route_segment, param) =
+            let (file_mod_name, route_segment, file_param) =
                 if stem.starts_with('[') && stem.ends_with(']') {
                     let param_name = &stem[1..stem.len() - 1];
                     (
                         format!("param_{}", param_name),
-                        format!("{{{}}}", param_name),
+                        format!(":{}", param_name),
                         Some(param_name.to_string()),
                     )
                 } else {
@@ -199,11 +223,17 @@ fn collect_layouts_and_routes(
 
             let methods = detect_methods(&path);
 
+            // Combine accumulated directory params with file-level param
+            let mut all_params = accumulated_params.to_vec();
+            if let Some(p) = file_param {
+                all_params.push(p);
+            }
+
             routes.push(RouteInfo {
                 url_path,
                 mod_name: full_mod_name,
                 dir_path: dir_path.clone(),
-                param,
+                params: all_params,
                 methods,
             });
         }
@@ -251,21 +281,34 @@ fn generate_wrapper_handler(
     let mut output = String::new();
 
     // Function signature - Req must be last since it implements FromRequest (consumes body)
-    if let Some(param) = &route.param {
+    if !route.params.is_empty() {
+        // Build Path extractor for multiple params
+        let params_tuple = if route.params.len() == 1 {
+            route.params[0].clone()
+        } else {
+            format!("({})", route.params.join(", "))
+        };
+        let params_type = if route.params.len() == 1 {
+            "String".to_string()
+        } else {
+            format!("({})", vec!["String"; route.params.len()].join(", "))
+        };
+
         output.push_str(&format!(
-            "async fn wrapper_{}_{}(\n    rejoice::State(state): rejoice::State<__RejoiceState>,\n    rejoice::Path({param}): rejoice::Path<String>,\n    req: rejoice::Req,\n) -> rejoice::Res {{\n",
+            "async fn wrapper_{}_{}(\n    rejoice::State(state): rejoice::State<__RejoiceState>,\n    rejoice::Path({params_tuple}): rejoice::Path<{params_type}>,\n    req: rejoice::Req,\n) -> rejoice::Res {{\n",
             route.mod_name, method
         ));
 
         output.push_str("    let res = rejoice::Res::new();\n");
+        let params_args = route.params.join(", ");
         if stateless {
             output.push_str(&format!(
-                "    let _ = state;\n    let res = routes::{}::{}(req.clone(), res, {param}).await;\n",
+                "    let _ = state;\n    let res = routes::{}::{}(req.clone(), res, {params_args}).await;\n",
                 route.mod_name, method
             ));
         } else {
             output.push_str(&format!(
-                "    let res = routes::{}::{}(state.clone(), req.clone(), res, {param}).await;\n",
+                "    let res = routes::{}::{}(state.clone(), req.clone(), res, {params_args}).await;\n",
                 route.mod_name, method
             ));
         }
@@ -343,10 +386,17 @@ fn generate_routes_mod(base_dir: &Path, dir: &Path, mod_prefix: &str, output: &m
         let file_name = path.file_name().unwrap().to_str().unwrap();
 
         if path.is_dir() {
-            let new_prefix = if mod_prefix.is_empty() {
-                file_name.to_string()
+            // Handle dynamic directory segments like [id]
+            let dir_mod_name = if file_name.starts_with('[') && file_name.ends_with(']') {
+                let param_name = &file_name[1..file_name.len() - 1];
+                format!("param_{}", param_name)
             } else {
-                format!("{}_{}", mod_prefix, file_name)
+                file_name.to_string()
+            };
+            let new_prefix = if mod_prefix.is_empty() {
+                dir_mod_name
+            } else {
+                format!("{}_{}", mod_prefix, dir_mod_name)
             };
             generate_routes_mod(base_dir, &path, &new_prefix, output);
         } else if file_name.ends_with(".rs") && file_name != "mod.rs" {

@@ -12,6 +12,9 @@ src/
 │       ├── mod.rs           # Command exports
 │       ├── init.rs          # `rejoice init` - project scaffolding
 │       ├── dev.rs           # `rejoice dev` - dev server with HMR
+│       ├── build.rs         # `rejoice build` - production builds
+│       ├── migrate.rs       # `rejoice migrate` - database migrations
+│       ├── boilerplate.rs   # Auto-generates route/layout boilerplate
 │       ├── islands.rs       # Generates client/islands.tsx registry
 │       └── style.rs         # Terminal output helpers
 ├── assets/
@@ -51,15 +54,16 @@ Creates a new project. Implementation in `src/bin/commands/init.rs`.
 
 Starts the dev server with:
 - Cargo watch for Rust recompilation
-- Vite watch for client assets
+- Vite watch for client assets (via Bun)
 - WebSocket-based live reload
+- Auto-generates boilerplate for new route/layout files
 
 ### `rejoice build [--release]`
 
 Builds the project for deployment. Implementation in `src/bin/commands/build.rs`.
 
 **Steps performed:**
-1. Install npm dependencies (if `node_modules/` missing and `client/` exists)
+1. Install dependencies with Bun (if `node_modules/` missing and `client/` exists)
 2. Generate islands registry (if `client/` exists)
 3. Build client assets with Vite (if `client/` exists)
 4. Build Rust binary with Cargo
@@ -70,6 +74,18 @@ Builds the project for deployment. Implementation in `src/bin/commands/build.rs`
 **Output locations:**
 - Binary: `target/debug/<name>` or `target/release/<name>`
 - Client assets: `dist/islands.js`, `dist/styles.css`
+
+### `rejoice migrate <action>`
+
+Database migrations via sqlx-cli. Implementation in `src/bin/commands/migrate.rs`.
+
+**Subcommands:**
+- `rejoice migrate add <name>` - Create a new reversible migration (up.sql + down.sql)
+- `rejoice migrate up` - Apply pending migrations
+- `rejoice migrate revert` - Revert the last migration
+- `rejoice migrate status` - Show migration status
+
+If sqlx-cli is not installed, the command will offer to install it automatically.
 
 ## Code Generation
 
@@ -92,7 +108,10 @@ Scans `src/routes/` recursively:
 - `index.rs` → `/` or `/parent`
 - `about.rs` → `/about`
 - `[id].rs` → `/:id` (dynamic segment)
+- `[id]/` → Directory with dynamic segment (e.g., `users/[id]/posts/` → `/users/:id/posts`)
 - `layout.rs` → Wrapper for sibling/child routes
+
+Dynamic segments can appear anywhere in the path, including directories. Multiple dynamic segments are supported (e.g., `/users/:user_id/posts/:post_id`).
 
 ### HTTP Method Detection
 
@@ -376,6 +395,6 @@ When modifying the framework:
 4. **Changing CLI commands** → Update clap definitions in `main.rs`
 5. **Changing generated project structure** → Update `init.rs` step count and file generation
 6. **Any significant changes** → Update this `AGENTS.md` file
-7. **ANY change to the framework** → Update `LLM_DOCS.md` to reflect the change. This file is the comprehensive user-facing documentation for AI agents building apps with Rejoice. It MUST stay perfectly in sync with the actual framework behavior. When in doubt, update it.
+7. **ANY change to the framework** → Update `llms.txt` and `llms-full.txt` to reflect the change. These files are the comprehensive user-facing documentation for AI agents building apps with Rejoice (following the llmstxt.org spec). They MUST stay perfectly in sync with the actual framework behavior. When in doubt, update them.
 8. **ANY change to the framework** → Update `/docs` to reflect the change. This is the documentation website for Rejoice, and MUST stay perfectly in sync with the actual framework behavior. When in doubt, update it.
 9. **ANY change to the framework** → Update `README.md` if the change affects user-facing features, API usage examples, or getting started instructions. The README is the first thing users see, so it must accurately reflect how the framework works.

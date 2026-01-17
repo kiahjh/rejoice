@@ -29,6 +29,26 @@ enum Commands {
         #[arg(long)]
         release: bool,
     },
+    /// Database migrations
+    Migrate {
+        #[command(subcommand)]
+        action: MigrateAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum MigrateAction {
+    /// Create a new migration
+    Add {
+        /// Migration name (e.g., "create_users_table")
+        name: String,
+    },
+    /// Apply pending migrations
+    Up,
+    /// Revert the last migration
+    Revert,
+    /// Show migration status
+    Status,
 }
 
 fn main() {
@@ -44,6 +64,12 @@ fn main() {
         Some(Commands::Build { release }) => {
             commands::build_command(release);
         }
+        Some(Commands::Migrate { action }) => match action {
+            MigrateAction::Add { name } => commands::migrate_add(&name),
+            MigrateAction::Up => commands::migrate_up(),
+            MigrateAction::Revert => commands::migrate_revert(),
+            MigrateAction::Status => commands::migrate_status(),
+        },
         None => {
             Cli::command().print_help().unwrap();
         }

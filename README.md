@@ -15,6 +15,8 @@ A simple and delightful web framework for Rust with file-based routing, layouts,
 
 ## Quick Start
 
+**Prerequisites:** [Bun](https://bun.sh/) must be installed for client-side builds.
+
 ```bash
 # Install the CLI
 cargo install rejoice
@@ -37,13 +39,15 @@ rejoice init my-app --with-db
 
 ```
 src/routes/
-├── layout.rs       -> Wraps all pages
-├── index.rs        -> GET /
-├── about.rs        -> GET /about
+├── layout.rs           -> Wraps all pages
+├── index.rs            -> GET /
+├── about.rs            -> GET /about
 └── users/
-    ├── layout.rs   -> Wraps /users/* pages
-    ├── index.rs    -> GET /users
-    └── [id].rs     -> GET /users/:id
+    ├── layout.rs       -> Wraps /users/* pages
+    ├── index.rs        -> GET /users
+    ├── [id].rs         -> GET /users/:id
+    └── [id]/
+        └── posts.rs    -> GET /users/:id/posts
 ```
 
 Each route file exports an HTTP method handler like `get` or `post`:
@@ -207,3 +211,32 @@ pub async fn get(req: Req, res: Res) -> Res {
 ```
 
 Tailwind automatically scans your `src/**/*.rs` and `client/**/*.tsx` files for classes.
+
+## Migrations
+
+Manage your database schema with migrations:
+
+```bash
+# Create a new migration
+rejoice migrate add create_users_table
+
+# Apply pending migrations
+rejoice migrate up
+
+# Revert the last migration
+rejoice migrate revert
+
+# Check migration status
+rejoice migrate status
+```
+
+Migrations are stored in the `migrations/` directory as reversible SQL files (up.sql and down.sql).
+
+## Auto-Generated Boilerplate
+
+When the dev server is running and you create a new route or layout file, Rejoice automatically fills it with appropriate boilerplate:
+
+- **Routes** get a basic `get` handler with the correct signature
+- **Layouts** get a proper layout function with `DOCTYPE` and children
+- **Dynamic routes** like `[id].rs` include the path parameter
+- **State detection** - if your app uses `AppState`, the boilerplate includes it

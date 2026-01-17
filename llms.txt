@@ -1,0 +1,45 @@
+# Rejoice
+
+> Rejoice is a Rust web framework featuring file-based routing, nested layouts, Maud HTML templating, SolidJS islands for client-side interactivity, Tailwind CSS v4, optional SQLite database support, and Bun-powered client builds.
+
+Key characteristics:
+
+- Routes are defined by `.rs` files in `src/routes/` with HTTP method functions (`get`, `post`, etc.)
+- Layouts wrap pages automatically via `layout.rs` files at any directory level
+- Request data accessed via `Req` type (headers, cookies, body parsing)
+- Response built via `Res` type with chainable methods (`html`, `json`, `redirect`)
+- HTML templating uses Maud's `html!` macro for compile-time safety
+- Client interactivity via SolidJS islands embedded with `island!` macro
+- Dynamic routes use `[param].rs` naming or `[param]/` directories
+
+## Docs
+
+- [Installation](https://rejoice.dev/docs/installation.html.md): How to install Rejoice CLI and create new projects
+- [Project Structure](https://rejoice.dev/docs/project-structure.html.md): Directory layout and file purposes
+- [CLI Commands](https://rejoice.dev/docs/cli.html.md): `rejoice init`, `rejoice dev`, `rejoice build`, `rejoice migrate`
+- [Routing](https://rejoice.dev/docs/routing.html.md): File-to-URL mapping, HTTP methods, dynamic routes
+- [Layouts](https://rejoice.dev/docs/layouts.html.md): Nested layouts, layout bypass for non-HTML responses
+- [Request Object](https://rejoice.dev/docs/request.html.md): Reading headers, cookies, body parsing (JSON/form)
+- [Response Object](https://rejoice.dev/docs/response.html.md): HTML, JSON, redirects, error helpers, cookies
+- [Templates](https://rejoice.dev/docs/templates.html.md): Maud HTML templating syntax and patterns
+- [Database](https://rejoice.dev/docs/database.html.md): SQLite setup, queries, migrations
+- [Islands](https://rejoice.dev/docs/islands.html.md): SolidJS component integration
+- [Tailwind CSS](https://rejoice.dev/docs/tailwind.html.md): Styling setup and usage
+- [Static Assets](https://rejoice.dev/docs/static-assets.html.md): Serving files from `public/`
+- [Deployment](https://rejoice.dev/docs/deployment.html.md): Building and running in production
+
+## API Reference
+
+- [Full Documentation](/llms-full.txt): Complete API documentation with all code examples (for comprehensive context)
+
+## Examples
+
+- [Simple Blog Example](https://github.com/kiahjh/rejoice/blob/main/examples/blog): Basic blog with layouts and routing
+- [Todo App with Islands](https://github.com/kiahjh/rejoice/blob/main/examples/todo): Interactive SolidJS components
+- [API with Database](https://github.com/kiahjh/rejoice/blob/main/examples/api): RESTful endpoints with SQLite
+
+## Optional
+
+- [Maud Documentation](https://maud.lambda.xyz/): Full Maud templating reference
+- [SolidJS Documentation](https://www.solidjs.com/docs/latest): SolidJS framework docs
+- [Axum Documentation](https://docs.rs/axum/latest/axum/): Underlying web framework (for advanced use cases)

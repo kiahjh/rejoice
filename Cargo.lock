@@ -404,7 +404,7 @@ dependencies = [
 
 [[package]]
 name = "docs"
-version = "0.11.4"
+version = "0.12.0"
 dependencies = [
  "html-escape",
  "maud",
@@ -1032,9 +1032,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.178"
+version = "0.2.180"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37c93d8daa9d8a012fd8ab92f088405fb202ea0b6ab73ee2482ae66af4f42091"
+checksum = "bcc35a38544a891a5f7c865aca548a982ccb3b8650a5b06d0fd33a10283c56fc"
 
 [[package]]
 name = "libm"
@@ -1476,7 +1476,7 @@ dependencies = [
 
 [[package]]
 name = "rejoice"
-version = "0.11.4"
+version = "0.12.0"
 dependencies = [
  "axum",
  "clap",
@@ -1484,6 +1484,7 @@ dependencies = [
  "dotenvy_macro",
  "futures",
  "html-escape",
+ "libc",
  "maud",
  "notify",
  "serde",

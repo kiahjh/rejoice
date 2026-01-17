@@ -34,3 +34,5 @@ pub mod index;
 pub mod layout;
 #[path = "routes/llms.rs"]
 pub mod llms;
+#[path = "routes/llms_full.rs"]
+pub mod llms_full;
