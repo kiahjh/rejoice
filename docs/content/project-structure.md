@@ -8,7 +8,7 @@ A Rejoice project follows a predictable structure that makes it easy to find and
 my-app/
 ├── build.rs                 # Build script for route generation
 ├── Cargo.toml               # Rust dependencies
-├── package.json             # Node.js dependencies
+├── package.json             # Dependencies (uses Bun)
 ├── vite.config.ts           # Vite configuration
 ├── tsconfig.json            # TypeScript configuration
 ├── .env                     # Environment variables (optional)

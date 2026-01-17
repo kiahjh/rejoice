@@ -63,7 +63,9 @@ Files named `index.rs` handle the directory's root path:
 
 ## Dynamic Routes
 
-Use square brackets for dynamic path segments:
+Use square brackets for dynamic path segments in file names or directory names.
+
+### Dynamic Files
 
 **`src/routes/users/[id].rs`** handles `/users/:id`:
 
@@ -79,13 +81,48 @@ pub async fn get(req: Req, res: Res, id: String) -> Res {
 
 The parameter is passed as the last argument to your handler function.
 
+### Dynamic Directories
+
+You can also use dynamic segments in directory names:
+
+**`src/routes/users/[id]/posts/index.rs`** handles `/users/:id/posts`:
+
+```rust
+use rejoice::{Req, Res, html};
+
+pub async fn get(req: Req, res: Res, id: String) -> Res {
+    res.html(html! {
+        h1 { "Posts for user " (id) }
+    })
+}
+```
+
+### Multiple Dynamic Segments
+
+Routes can have multiple dynamic parameters:
+
+**`src/routes/users/[user_id]/posts/[post_id]/index.rs`** handles `/users/:user_id/posts/:post_id`:
+
+```rust
+use rejoice::{Req, Res, html};
+
+pub async fn get(req: Req, res: Res, user_id: String, post_id: String) -> Res {
+    res.html(html! {
+        h1 { "Post " (post_id) " by user " (user_id) }
+    })
+}
+```
+
+Parameters are passed to the handler in the order they appear in the URL path.
+
 ### Examples
 
-| File | URL | Parameter |
-|------|-----|-----------|
-| `[id].rs` | `/users/123` | `id = "123"` |
-| `[slug].rs` | `/blog/hello-world` | `slug = "hello-world"` |
-| `[category].rs` | `/products/electronics` | `category = "electronics"` |
+| File | URL | Parameters |
+|------|-----|------------|
+| `users/[id].rs` | `/users/123` | `id = "123"` |
+| `blog/[slug].rs` | `/blog/hello-world` | `slug = "hello-world"` |
+| `users/[id]/posts/index.rs` | `/users/5/posts` | `id = "5"` |
+| `users/[uid]/posts/[pid].rs` | `/users/5/posts/42` | `uid = "5"`, `pid = "42"` |
 
 ## Route Function Signatures
 

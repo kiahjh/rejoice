@@ -7,7 +7,7 @@ Get started with Rejoice in just a few steps.
 Before you begin, make sure you have the following installed:
 
 - **Rust** (1.85 or later) - [Install Rust](https://rustup.rs)
-- **Node.js** (18 or later) - [Install Node.js](https://nodejs.org)
+- **Bun** - [Install Bun](https://bun.sh)
 
 ## Install the CLI
 

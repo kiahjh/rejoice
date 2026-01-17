@@ -949,7 +949,7 @@ This creates:
 **`Cargo.toml`**:
 ```toml
 [dependencies]
-rejoice = { version = "0.10.0", features = ["sqlite"] }
+rejoice = { version = "0.12.0", features = ["sqlite"] }
 ```
 
 **`src/main.rs`**:

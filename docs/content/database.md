@@ -16,7 +16,7 @@ Enable the feature in `Cargo.toml`:
 
 ```toml
 [dependencies]
-rejoice = { version = "0.10.0", features = ["sqlite"] }
+rejoice = { version = "0.12.0", features = ["sqlite"] }
 ```
 
 Create `.env`:
@@ -91,6 +91,50 @@ pub async fn get(state: AppState, req: Req, res: Res) -> Res {
     
     res.html(html! { /* ... */ })
 }
+```
+
+## Migrations
+
+Rejoice provides a convenient CLI for managing database migrations.
+
+### Creating Migrations
+
+```bash
+rejoice migrate add create_users_table
+```
+
+This creates two files in `migrations/`:
+- `<timestamp>_create_users_table.up.sql` - SQL to apply the migration
+- `<timestamp>_create_users_table.down.sql` - SQL to revert the migration
+
+### Running Migrations
+
+```bash
+# Apply all pending migrations
+rejoice migrate up
+
+# Revert the last migration
+rejoice migrate revert
+
+# Check migration status
+rejoice migrate status
+```
+
+### Example Migration
+
+**`migrations/20250117000000_create_users_table.up.sql`**:
+```sql
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+**`migrations/20250117000000_create_users_table.down.sql`**:
+```sql
+DROP TABLE users;
 ```
 
 For complete sqlx documentation, see [docs.rs/sqlx](https://docs.rs/sqlx).

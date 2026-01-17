@@ -1,5 +1,5 @@
 use crate::markdown::code_block_with_filename;
-use rejoice::{html, island, json, Req, Res};
+use rejoice::{Req, Res, html, island, json};
 
 pub async fn get(req: Req, res: Res) -> Res {
     let _ = req;
@@ -12,7 +12,7 @@ pub async fn get(req: Req, res: Res) -> Res {
             "children": [
                 { "name": "build.rs", "type": "file", "comment": "Build script for route generation" },
                 { "name": "Cargo.toml", "type": "file", "comment": "Rust dependencies" },
-                { "name": "package.json", "type": "file", "comment": "Node.js dependencies" },
+                { "name": "package.json", "type": "file", "comment": "Dependencies (uses Bun)" },
                 { "name": "vite.config.ts", "type": "file", "comment": "Vite configuration" },
                 { "name": "tsconfig.json", "type": "file", "comment": "TypeScript configuration" },
                 { "name": ".env", "type": "file", "comment": "Environment variables (optional)" },

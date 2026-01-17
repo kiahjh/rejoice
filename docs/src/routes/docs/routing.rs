@@ -1,5 +1,5 @@
 use crate::markdown::code_block_with_filename;
-use rejoice::{html, island, json, Req, Res};
+use rejoice::{Req, Res, html, island, json};
 
 pub async fn get(req: Req, res: Res) -> Res {
     let _ = req;
@@ -97,7 +97,9 @@ pub async fn get(req: Req, res: Res) -> Res {
 
         h2 { "Dynamic Routes" }
 
-        p { "Use square brackets for dynamic path segments:" }
+        p { "Use square brackets for dynamic path segments in file names or directory names." }
+
+        h3 { "Dynamic Files" }
 
         p { strong { code { "src/routes/users/[id].rs" } } " handles " code { "/users/:id" } ":" }
 
@@ -111,6 +113,36 @@ pub async fn get(req: Req, res: Res, id: String) -> Res {
 
         p { "The parameter is passed as the last argument to your handler function." }
 
+        h3 { "Dynamic Directories" }
+
+        p { "You can also use dynamic segments in directory names:" }
+
+        p { strong { code { "src/routes/users/[id]/posts/index.rs" } } " handles " code { "/users/:id/posts" } ":" }
+
+        (code_block_with_filename(r#"use rejoice::{Req, Res, html};
+
+pub async fn get(req: Req, res: Res, id: String) -> Res {
+    res.html(html! {
+        h1 { "Posts for user " (id) }
+    })
+}"#, "rust", Some("src/routes/users/[id]/posts/index.rs")))
+
+        h3 { "Multiple Dynamic Segments" }
+
+        p { "Routes can have multiple dynamic parameters:" }
+
+        p { strong { code { "src/routes/users/[user_id]/posts/[post_id]/index.rs" } } " handles " code { "/users/:user_id/posts/:post_id" } ":" }
+
+        (code_block_with_filename(r#"use rejoice::{Req, Res, html};
+
+pub async fn get(req: Req, res: Res, user_id: String, post_id: String) -> Res {
+    res.html(html! {
+        h1 { "Post " (post_id) " by user " (user_id) }
+    })
+}"#, "rust", Some("src/routes/users/[user_id]/posts/[post_id]/index.rs")))
+
+        p { "Parameters are passed to the handler in the order they appear in the URL path." }
+
         h3 { "Examples" }
 
         table {
@@ -118,13 +150,14 @@ pub async fn get(req: Req, res: Res, id: String) -> Res {
                 tr {
                     th { "File" }
                     th { "URL" }
-                    th { "Parameter" }
+                    th { "Parameters" }
                 }
             }
             tbody {
-                tr { td { code { "[id].rs" } } td { code { "/users/123" } } td { code { "id = \"123\"" } } }
-                tr { td { code { "[slug].rs" } } td { code { "/blog/hello-world" } } td { code { "slug = \"hello-world\"" } } }
-                tr { td { code { "[category].rs" } } td { code { "/products/electronics" } } td { code { "category = \"electronics\"" } } }
+                tr { td { code { "users/[id].rs" } } td { code { "/users/123" } } td { code { "id = \"123\"" } } }
+                tr { td { code { "blog/[slug].rs" } } td { code { "/blog/hello-world" } } td { code { "slug = \"hello-world\"" } } }
+                tr { td { code { "users/[id]/posts/index.rs" } } td { code { "/users/5/posts" } } td { code { "id = \"5\"" } } }
+                tr { td { code { "users/[uid]/posts/[pid].rs" } } td { code { "/users/5/posts/42" } } td { code { "uid = \"5\", pid = \"42\"" } } }
             }
         }
 
