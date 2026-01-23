@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.12.1
+
+- Fixed Windows compatibility: moved `tokio`, `tower`, and `tower-http` out of Unix-only dependencies so the crate compiles on Windows
+
 ## 0.12.0
 
 - **Switched from npm to Bun** - All client-side builds now use Bun for faster installs and builds
