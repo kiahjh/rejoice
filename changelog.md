@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.12.2
+
+- Improved error messaging when Vite build fails due to missing modules - now suggests clearing `node_modules` and reinstalling dependencies
+
 ## 0.12.1
 
 - Fixed Windows compatibility: moved `tokio`, `tower`, and `tower-http` out of Unix-only dependencies so the crate compiles on Windows

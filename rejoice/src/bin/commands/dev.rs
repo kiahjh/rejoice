@@ -339,11 +339,45 @@ fn handle_rust_change(
 }
 
 fn run_vite_build() {
-    let _ = Command::new("bun")
+    let output = Command::new("bun")
         .args(["run", "build"])
         .stdout(Stdio::null())
-        .stderr(Stdio::inherit())
-        .status();
+        .stderr(Stdio::piped())
+        .output();
+
+    match output {
+        Ok(out) if !out.status.success() => {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            // Print the actual error
+            eprint!("{}", stderr);
+
+            // Check for common dependency resolution issues
+            if stderr.contains("ERR_MODULE_NOT_FOUND") || stderr.contains("Cannot find module") {
+                eprintln!(
+                    "\n  {} {}",
+                    "Hint:".yellow().bold(),
+                    "This may be a corrupted node_modules. Try:".white()
+                );
+                #[cfg(windows)]
+                eprintln!(
+                    "    {} {}",
+                    "$".dimmed(),
+                    "rmdir /s /q node_modules && del bun.lock && bun install".white()
+                );
+                #[cfg(not(windows))]
+                eprintln!(
+                    "    {} {}",
+                    "$".dimmed(),
+                    "rm -rf node_modules bun.lock && bun install".white()
+                );
+                eprintln!();
+            }
+        }
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!("{} Failed to run vite build: {}", "!".red().bold(), e);
+        }
+    }
 }
 
 fn start_app() -> Child {
