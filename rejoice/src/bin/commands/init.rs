@@ -277,13 +277,13 @@ fn write_package_json(project_dir: &Path) {
     "dev": "vite build --watch"
   },
   "dependencies": {
-    "solid-js": "^1.9.5"
+    "solid-js": "1.9.5"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.1.7",
-    "tailwindcss": "^4.1.7",
-    "vite": "^6.3.5",
-    "vite-plugin-solid": "^2.11.6"
+    "@tailwindcss/vite": "4.1.7",
+    "tailwindcss": "4.1.7",
+    "vite": "6.3.5",
+    "vite-plugin-solid": "2.11.10"
   }
 }
 "#;

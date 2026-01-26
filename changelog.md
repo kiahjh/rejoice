@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.12.3
+
+- Fixed Windows dependency resolution issue: pinned exact versions in generated `package.json` (removed `^` ranges) and updated `vite-plugin-solid` to `2.11.10` to prevent `merge-anything` module not found errors
+
 ## 0.12.2
 
 - Improved error messaging when Vite build fails due to missing modules - now suggests clearing `node_modules` and reinstalling dependencies
