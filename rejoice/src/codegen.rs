@@ -154,7 +154,7 @@ fn collect_layouts_and_routes(
                     let param_name = &file_name[1..file_name.len() - 1];
                     (
                         format!("param_{}", param_name),
-                        format!(":{}", param_name),
+                        format!("{{{}}}", param_name),
                         Some(param_name.to_string()),
                     )
                 } else {
@@ -197,7 +197,7 @@ fn collect_layouts_and_routes(
                     let param_name = &stem[1..stem.len() - 1];
                     (
                         format!("param_{}", param_name),
-                        format!(":{}", param_name),
+                        format!("{{{}}}", param_name),
                         Some(param_name.to_string()),
                     )
                 } else {
@@ -267,7 +267,11 @@ fn get_layout_chain(route: &RouteInfo, layouts: &HashMap<String, String>) -> Opt
         }
     }
 
-    if chain.is_empty() { None } else { Some(chain) }
+    if chain.is_empty() {
+        None
+    } else {
+        Some(chain)
+    }
 }
 
 fn generate_wrapper_handler(

@@ -66,11 +66,17 @@ impl App {
     }
 
     pub async fn run(self) {
-        let listener = tokio::net::TcpListener::bind(&format!("127.0.0.1:{}", self.port))
+        let dev_mode = std::env::var("REJOICE_DEV").is_ok();
+        
+        // In production, bind to 0.0.0.0 to accept connections from proxies/load balancers
+        // In dev mode, bind to 127.0.0.1 for security
+        let host = if dev_mode { "127.0.0.1" } else { "0.0.0.0" };
+        let addr = format!("{}:{}", host, self.port);
+        
+        let listener = tokio::net::TcpListener::bind(&addr)
             .await
             .unwrap();
 
-        let dev_mode = std::env::var("REJOICE_DEV").is_ok();
         if dev_mode {
             println!(
                 "{} {} {}",
@@ -79,7 +85,7 @@ impl App {
                 format!("http://localhost:{}", self.port).cyan().underline()
             );
         } else {
-            println!("Listening on http://localhost:{}", self.port);
+            println!("Listening on {}", addr);
         }
 
         axum::serve(listener, self.router).await.unwrap();

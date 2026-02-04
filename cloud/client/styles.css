@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+@source "../src/**/*.rs";
+@source "./**/*.tsx";
+
+/* Inter font */
+@import url('https://rsms.me/inter/inter.css');
+
+html {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-feature-settings: 'ss01' 1, 'cv01' 1;
+}
+
+@supports (font-variation-settings: normal) {
+  html {
+    font-family: 'Inter var', system-ui, -apple-system, sans-serif;
+  }
+}
+
+::selection {
+  background: rgb(180 130 80 / 0.3);
+}
+
+:focus-visible {
+  outline: 2px solid rgb(180 130 80 / 0.5);
+  outline-offset: 2px;
+}
+
+/* Warm ambient glow */
+body::before {
+  content: '';
+  position: fixed;
+  top: -300px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 900px;
+  height: 600px;
+  background: radial-gradient(ellipse 50% 50% at center, rgb(180 130 80 / 0.04), transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(120 100 80 / 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(120 100 80 / 0.3);
+}
+
+/* Custom checkbox styles */
+.checkbox-input:checked + .checkbox-box svg {
+  opacity: 1;
+}
+
+.checkbox-input:checked + .checkbox-box {
+  background-color: rgb(217 119 6); /* amber-600 */
+  border-color: rgb(217 119 6);
+}
+
+/* Custom toggle styles */
+.toggle-input:checked + .toggle-track {
+  background-color: rgb(217 119 6); /* amber-600 */
+}
+
+.toggle-input:checked + .toggle-track .toggle-knob {
+  transform: translateX(1rem);
+}

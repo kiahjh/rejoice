@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.12.4
+
+- **Production-ready network binding** - Server now binds to `0.0.0.0` in production for compatibility with containers, proxies, and cloud platforms (Fly.io, Railway, etc.). In dev mode (`REJOICE_DEV` set), it still binds to `127.0.0.1` for security.
+
 ## 0.12.3
 
 - Fixed Windows dependency resolution issue: pinned exact versions in generated `package.json` (removed `^` ranges) and updated `vite-plugin-solid` to `2.11.10` to prevent `merge-anything` module not found errors
