@@ -10,6 +10,7 @@ struct Project {
     name: String,
     github_repo: String,
     fly_app_name: Option<String>,
+    github_installation_id: Option<i64>,
 }
 
 /// GET /projects/:id/deploy - Show deploy confirmation page
@@ -22,7 +23,7 @@ pub async fn get(state: AppState, req: Req, res: Res, id: String) -> Res {
     // Verify project belongs to user
     let project = query_as::<_, Project>(
         r#"
-        SELECT p.id, p.name, p.github_repo, p.fly_app_name
+        SELECT p.id, p.name, p.github_repo, p.fly_app_name, p.github_installation_id
         FROM projects p
         JOIN users u ON p.user_id = u.id
         WHERE p.id = ? AND u.github_id = ?
@@ -140,7 +141,7 @@ pub async fn post(state: AppState, req: Req, res: Res, id: String) -> Res {
     // Verify project belongs to user and get env vars
     let project = query_as::<_, Project>(
         r#"
-        SELECT p.id, p.name, p.github_repo, p.fly_app_name
+        SELECT p.id, p.name, p.github_repo, p.fly_app_name, p.github_installation_id
         FROM projects p
         JOIN users u ON p.user_id = u.id
         WHERE p.id = ? AND u.github_id = ?
@@ -155,6 +156,24 @@ pub async fn post(state: AppState, req: Req, res: Res, id: String) -> Res {
         Ok(Some(p)) => p,
         Ok(None) => return res.forbidden("Not authorized"),
         Err(_) => return res.internal_error("Database error"),
+    };
+
+    // Get authenticated clone URL if we have an installation ID
+    let clone_url = if let Some(installation_id) = project.github_installation_id {
+        let parts: Vec<&str> = project.github_repo.split('/').collect();
+        if parts.len() == 2 {
+            match state.github_app.get_authenticated_clone_url(installation_id, parts[0], parts[1]).await {
+                Ok(url) => Some(url),
+                Err(e) => {
+                    eprintln!("Failed to get authenticated clone URL: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    } else {
+        None
     };
 
     // Get environment variables for this project
@@ -224,13 +243,16 @@ pub async fn post(state: AppState, req: Req, res: Res, id: String) -> Res {
         fly_org: state.fly_org.clone(),
         env_vars,
         is_first_deploy,
+        clone_url,
+        github_installation_id: project.github_installation_id,
     };
 
     let db = state.db.clone();
     let dep_id = deployment_id.clone();
+    let github_app = state.github_app.clone();
 
     tokio::spawn(async move {
-        run_deployment(deploy_config, db, dep_id).await;
+        run_deployment(deploy_config, db, dep_id, github_app).await;
     });
 
     // Redirect to deployment detail page immediately
@@ -241,9 +263,9 @@ pub async fn post(state: AppState, req: Req, res: Res, id: String) -> Res {
 }
 
 /// Run the deployment in the background and update the database with results.
-async fn run_deployment(config: DeployConfig, db: Pool<Sqlite>, deployment_id: String) {
+async fn run_deployment(config: DeployConfig, db: Pool<Sqlite>, deployment_id: String, github_app: crate::github::GitHubApp) {
     // Run the deployment with streaming logs
-    let result = deployer::deploy(config, Some(db.clone()), Some(deployment_id.clone())).await;
+    let result = deployer::deploy(config, Some(db.clone()), Some(deployment_id.clone()), Some(github_app)).await;
 
     // Update deployment record with results
     if result.success {

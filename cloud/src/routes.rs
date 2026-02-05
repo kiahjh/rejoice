@@ -1,3 +1,5 @@
+#[path = "routes/auth/github/app/callback.rs"]
+pub mod auth_github_app_callback;
 #[path = "routes/auth/github/callback.rs"]
 pub mod auth_github_callback;
 #[path = "routes/auth/github/index.rs"]
@@ -28,3 +30,5 @@ pub mod projects_param_id_settings_index;
 pub mod projects_index;
 #[path = "routes/projects/new.rs"]
 pub mod projects_new;
+#[path = "routes/webhooks/github.rs"]
+pub mod webhooks_github;

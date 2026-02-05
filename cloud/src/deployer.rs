@@ -44,14 +44,30 @@ pub struct DeployConfig {
     pub env_vars: Vec<(String, String)>,
     /// Whether this is the first deployment (need to create app)
     pub is_first_deploy: bool,
+    /// Optional authenticated clone URL (for private repos)
+    /// If provided, uses this instead of public https://github.com/... URL
+    pub clone_url: Option<String>,
+    /// GitHub App installation ID (for posting commit status)
+    pub github_installation_id: Option<i64>,
+}
+
+/// Context for GitHub status updates
+pub struct GitHubStatusContext {
+    pub github_app: crate::github::GitHubApp,
+    pub installation_id: i64,
+    pub owner: String,
+    pub repo: String,
+    pub sha: String,
 }
 
 /// Deploy a Rejoice application to Fly.io.
 /// If `db` and `deployment_id` are provided, logs will be streamed to the database.
+/// If `github_app` is provided, commit status will be posted to GitHub.
 pub async fn deploy(
     config: DeployConfig,
     db: Option<Pool<Sqlite>>,
     deployment_id: Option<String>,
+    github_app: Option<crate::github::GitHubApp>,
 ) -> DeployResult {
     let mut logs = String::new();
     
@@ -89,12 +105,12 @@ pub async fn deploy(
 
     // Clone the repository
     logs.push_str(&format!(
-        "Cloning https://github.com/{} (branch: {})...\n",
+        "Cloning {} (branch: {})...\n",
         config.github_repo, config.branch
     ));
     update_logs(&db, &deployment_id, &logs).await;
 
-    match clone_repo(&config.github_repo, &config.branch, &temp_dir).await {
+    match clone_repo(&config.github_repo, &config.branch, &temp_dir, config.clone_url.as_deref()).await {
         Ok(output) => {
             logs.push_str(&output);
             update_logs(&db, &deployment_id, &logs).await;
@@ -111,14 +127,38 @@ pub async fn deploy(
     }
 
     // Get commit info and update deployment record
-    if let (Some(db), Some(dep_id)) = (&db, &deployment_id) {
-        if let Some((sha, message)) = get_commit_info(&temp_dir).await {
+    let commit_sha = if let Some((sha, message)) = get_commit_info(&temp_dir).await {
+        if let (Some(db), Some(dep_id)) = (&db, &deployment_id) {
             let _ = query("UPDATE deployments SET git_sha = ?, git_message = ? WHERE id = ?")
                 .bind(&sha)
                 .bind(&message)
                 .bind(dep_id)
                 .execute(db)
                 .await;
+        }
+        Some(sha)
+    } else {
+        None
+    };
+
+    // Post pending status to GitHub
+    if let (Some(github_app), Some(installation_id), Some(sha)) = (&github_app, config.github_installation_id, &commit_sha) {
+        let parts: Vec<&str> = config.github_repo.split('/').collect();
+        if parts.len() == 2 {
+            let target_url = deployment_id.as_ref().map(|dep_id| {
+                // TODO: Replace with actual cloud URL
+                format!("http://localhost:3333/projects/{}/deployments/{}", "project_id", dep_id)
+            });
+            let _ = github_app.create_commit_status(
+                installation_id,
+                parts[0],
+                parts[1],
+                sha,
+                crate::github::CommitStatusState::Pending,
+                target_url.as_deref(),
+                Some("Deployment in progress..."),
+                "Rejoice Cloud",
+            ).await;
         }
     }
 
@@ -231,7 +271,7 @@ pub async fn deploy(
     logs.push_str("This may take a few minutes...\n\n");
     update_logs(&db, &deployment_id, &logs).await;
 
-    match run_flyctl_deploy_streaming(&config, &temp_dir, &db, &deployment_id, &logs).await {
+    let result = match run_flyctl_deploy_streaming(&config, &temp_dir, &db, &deployment_id, &logs).await {
         Ok(output) => {
             logs.push_str(&output);
             logs.push_str("\n\nDeployment complete!\n");
@@ -257,7 +297,32 @@ pub async fn deploy(
                 error: Some("Deployment failed - see build logs for details".to_string()),
             }
         }
+    };
+
+    // Post final status to GitHub
+    if let (Some(github_app), Some(installation_id), Some(sha)) = (&github_app, config.github_installation_id, &commit_sha) {
+        let parts: Vec<&str> = config.github_repo.split('/').collect();
+        if parts.len() == 2 {
+            let (state, description) = if result.success {
+                (crate::github::CommitStatusState::Success, "Deployment successful")
+            } else {
+                (crate::github::CommitStatusState::Failure, "Deployment failed")
+            };
+            let target_url = result.url.as_deref();
+            let _ = github_app.create_commit_status(
+                installation_id,
+                parts[0],
+                parts[1],
+                sha,
+                state,
+                target_url,
+                Some(description),
+                "Rejoice Cloud",
+            ).await;
+        }
     }
+
+    result
 }
 
 /// Create a temporary directory for the build.
@@ -279,8 +344,11 @@ async fn cleanup_temp_dir(path: &Path) {
 
 /// Clone a GitHub repository.
 /// Tries the specified branch first, then falls back to common defaults (master, main).
-async fn clone_repo(repo: &str, branch: &str, dest: &Path) -> Result<String, String> {
-    let url = format!("https://github.com/{}.git", repo);
+/// If `clone_url` is provided, uses it instead of the default public URL (for private repos).
+async fn clone_repo(repo: &str, branch: &str, dest: &Path, clone_url: Option<&str>) -> Result<String, String> {
+    let url = clone_url
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| format!("https://github.com/{}.git", repo));
     
     // Try branches in order: specified branch, then master, then main
     let branches_to_try = if branch == "master" {

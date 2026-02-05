@@ -6,7 +6,7 @@
 
 ## Current Implementation Status
 
-**Last Updated:** February 4, 2026
+**Last Updated:** February 5, 2026
 
 ### What's Working
 
@@ -16,31 +16,43 @@ The Rejoice Cloud dashboard is functional with:
    - GitHub OAuth login/logout
    - Session management via cookies
 
-2. **Project Management**
-   - Create new projects linked to GitHub repos
+2. **GitHub App Integration**
+   - GitHub App for repo access and webhooks
+   - Installation flow with automatic callback
+   - Private repository support via installation tokens
+   - Repo selector with search (fetches all repos with pagination)
+
+3. **Project Management**
+   - Create new projects by selecting from GitHub repos
    - View project list and details
    - Delete projects
 
-3. **Manual Deployments**
-   - Click "Deploy Now" to trigger a deployment
-   - Automatic project structure detection (client/, public/, database)
+4. **Automatic Deployments**
+   - **Auto-deploy on push to main/master branch** via webhooks
+   - Manual "Deploy Now" button still available
+   - Automatic project structure detection (client/, public/, database, port)
    - Dockerfile generation tailored to project type
    - Deploy to Fly.io with remote builder
-   - Real-time log streaming to database
-   - View deployment status and logs with auto-refresh
+   - Real-time log streaming with auto-scroll (SolidJS island)
+   - Automatic page refresh when deployment completes
+   - Commit SHA and message displayed
 
-4. **Environment Variables**
+5. **GitHub Commit Status**
+   - Posts "pending" status when deployment starts
+   - Posts "success" or "failure" status when deployment completes
+   - Links to deployment URL on success
+
+6. **Environment Variables**
    - Add/delete encrypted environment variables
    - Preview-only flag for variables
    - Variables injected as Fly secrets at deploy time
 
-5. **Component System**
+7. **Component System**
    - Full Tailwind-based UI component library
    - Cards, buttons, forms, badges, icons, etc.
 
 ### What's Not Yet Implemented
 
-- GitHub App integration (webhooks, auto-deploy on push)
 - Preview deployments (auto-create on PR)
 - Custom domains
 - Database migrations at deploy time
@@ -339,10 +351,12 @@ Each app gets a persistent volume mounted at `/data`:
   - [x] Manual "Deploy Now" button
   - [ ] Basic usage display
 
-- [ ] **GitHub Integration**
-  - [ ] GitHub App creation & installation flow
-  - [ ] Webhook handling (push, pull_request)
-  - [ ] Post commit status checks
+- [x] **GitHub Integration**
+  - [x] GitHub App creation & installation flow
+  - [x] Webhook handling (push events)
+  - [x] Auto-deploy on push to main/master
+  - [x] Post commit status checks (pending/success/failure)
+  - [x] Private repository support
 
 - [x] **Build & Deploy**
   - [x] Detect Rejoice project structure
@@ -364,7 +378,7 @@ Each app gets a persistent volume mounted at `/data`:
 
 - [ ] **Notifications**
   - [ ] Email on build failure
-  - [ ] GitHub status checks
+  - [x] GitHub status checks
 
 - [ ] **Billing**
   - [ ] Stripe integration
@@ -489,11 +503,11 @@ Starting immediately, working on Cloud and framework updates in parallel.
 - [x] Environment variable injection
 - [x] Basic logs display (with streaming updates)
 
-**Phase 3: GitHub Integration (Weeks 7-8)** - NOT STARTED
-- [ ] GitHub App setup
-- [ ] Webhook handling
-- [ ] Auto-deploy on push
-- [ ] Status checks
+**Phase 3: GitHub Integration (Weeks 7-8)** ✅ COMPLETE
+- [x] GitHub App setup
+- [x] Webhook handling
+- [x] Auto-deploy on push
+- [x] Status checks
 
 **Phase 4: Preview Deployments (Weeks 9-10)** - NOT STARTED
 - [ ] PR webhook handling
@@ -510,8 +524,9 @@ Starting immediately, working on Cloud and framework updates in parallel.
 
 **Phase 6: Framework Updates (Parallel)** - PARTIAL
 - [ ] `rejoice.toml` config
-- [ ] Health checks
+- [ ] Health checks (currently using `/` as health check endpoint)
 - [ ] Graceful shutdown
+- [x] Production network binding (`0.0.0.0` vs `127.0.0.1`) - Rejoice v0.12.4
 
 ---
 
@@ -531,7 +546,27 @@ Starting immediately, working on Cloud and framework updates in parallel.
 
 - **Dockerfile fails when `public/` doesn't exist**: The generated Dockerfile was always trying to `COPY` the `public/` directory even if the project didn't have one. Now the deployer detects whether `public/` exists and only includes the COPY command when needed.
 
+- **Log streaming stops after build completes**: The `select!` loop was breaking when stdout reached EOF, missing stderr output about machine provisioning. Fixed to track both streams independently and only exit when both are done.
+
+- **Deployed apps not reachable (health checks fail)**: Two issues:
+  1. Rejoice framework was binding to `127.0.0.1` instead of `0.0.0.0` - fixed in Rejoice v0.12.4
+  2. Port mismatch between fly.toml and app - now auto-detected from `main.rs`
+
+- **Commit message showing "Deployment in progress..."**: Now fetches actual commit SHA and message from the cloned repo after clone completes.
+
+- **Page doesn't update when deployment finishes**: Added auto-refresh to the LogViewer island that reloads the page 1.5 seconds after deployment completes.
+
+### Fixed (February 5, 2026)
+
+- **GitHub App integration complete**: Full GitHub App with installation flow, webhook handling, and commit status posting.
+
+- **Auto-deploy on push**: Pushing to main/master branch now automatically triggers a deployment via GitHub webhooks.
+
+- **Private repository support**: Using GitHub App installation tokens for authenticated git clone, private repos now work.
+
+- **Repo selector with search**: Project creation now shows all repos (with pagination) and includes a search filter.
+
 ---
 
 *Document created: February 2026*
-*Last updated: February 4, 2026*
+*Last updated: February 5, 2026*

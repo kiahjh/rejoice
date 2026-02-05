@@ -10,6 +10,7 @@ pub mod components;
 pub mod crypto;
 pub mod deployer;
 pub mod fly;
+pub mod github;
 
 rejoice::routes!(AppState);
 
@@ -20,6 +21,7 @@ pub struct AppState {
     pub fly: fly::FlyClient,
     pub fly_token: String,
     pub fly_org: String,
+    pub github_app: github::GitHubApp,
 }
 
 #[tokio::main]
@@ -46,12 +48,22 @@ async fn main() {
     let fly_token = rejoice::env!("FLY_API_TOKEN").to_string();
     let fly_org = rejoice::env!("FLY_ORG_SLUG").to_string();
 
+    // Create GitHub App client
+    let github_app_private_key = std::fs::read_to_string(rejoice::env!("GITHUB_APP_PRIVATE_KEY_PATH"))
+        .expect("Failed to read GitHub App private key file");
+    let github_app = github::GitHubApp::new(
+        rejoice::env!("GITHUB_APP_ID").to_string(),
+        &github_app_private_key,
+    )
+    .expect("Failed to create GitHub App client");
+
     let state = AppState {
         db: pool,
         encryption_key,
         fly,
         fly_token,
         fly_org,
+        github_app,
     };
 
     let app = App::with_state(3333, create_router(), state);
