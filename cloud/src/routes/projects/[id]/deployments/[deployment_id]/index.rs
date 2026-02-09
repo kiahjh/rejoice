@@ -1,4 +1,4 @@
-use crate::components::{self as ui, BadgeVariant};
+use crate::components::{self as ui, icon, BadgeVariant};
 use crate::AppState;
 use rejoice::db::{query_as, FromRow};
 use rejoice::{html, island, Req, Res};
@@ -74,13 +74,31 @@ pub async fn get(
         Err(_) => return res.internal_error("Database error"),
     };
 
-    let status_badge = match deployment.status.as_str() {
-        "pending" => ui::badge("Pending", BadgeVariant::Default),
-        "building" => ui::badge("Building", BadgeVariant::Warning),
-        "deploying" => ui::badge("Deploying", BadgeVariant::Warning),
-        "success" => ui::badge("Live", BadgeVariant::Success),
-        "failed" => ui::badge("Failed", BadgeVariant::Error),
-        _ => ui::badge(&deployment.status, BadgeVariant::Default),
+    let (status_badge, _status_icon) = match deployment.status.as_str() {
+        "pending" => (
+            ui::badge("Pending", BadgeVariant::Default),
+            icon::clock(16),
+        ),
+        "building" => (
+            ui::badge("Building", BadgeVariant::Warning),
+            icon::terminal(16),
+        ),
+        "deploying" => (
+            ui::badge("Deploying", BadgeVariant::Warning),
+            icon::rocket(16),
+        ),
+        "success" => (
+            ui::badge("Live", BadgeVariant::Success),
+            icon::check_circle(16),
+        ),
+        "failed" => (
+            ui::badge("Failed", BadgeVariant::Error),
+            icon::x_circle(16),
+        ),
+        _ => (
+            ui::badge(&deployment.status, BadgeVariant::Default),
+            icon::clock(16),
+        ),
     };
 
     let commit_message = deployment
@@ -91,91 +109,145 @@ pub async fn get(
     // Check if deployment is in progress
     let is_in_progress = matches!(deployment.status.as_str(), "pending" | "building" | "deploying");
     let is_finished = !is_in_progress;
+    let is_success = deployment.status == "success";
+    let is_failed = deployment.status == "failed";
 
-    // Prepare island props - need to extract values for the macro
+    // Prepare island props
     let project_id = id.clone();
     let dep_id = deployment.id.clone();
     let initial_logs = deployment.build_logs.clone();
     let initial_status = deployment.status.clone();
 
+    let short_sha = &deployment.git_sha[..7.min(deployment.git_sha.len())];
+
     res.html(html! {
-        div class="max-w-3xl mx-auto px-6 py-10" {
+        div class="max-w-4xl mx-auto px-6 py-10" {
             // Back link
-            a href=(format!("/projects/{}", id)) class="text-sm text-stone-500 hover:text-stone-300 no-underline" {
-                "← " (&project.name)
-            }
+            (ui::back_link(&format!("/projects/{}", id), &project.name))
 
             // Header
             div class="mt-6" {
+                // Status header with icon and badge
                 div class="flex items-center gap-3 mb-2" {
-                    h1 class="text-xl font-medium text-stone-100" { "Deployment" }
-                    (status_badge)
-                }
-                p class="text-sm text-stone-400" {
-                    "Commit "
-                    code class="font-mono text-stone-300" { (&deployment.git_sha[..7.min(deployment.git_sha.len())]) }
-                    " on "
-                    span class="text-stone-300" { (&deployment.git_branch) }
-                    @if let Some(pr) = deployment.pr_number {
-                        " (PR #" (pr) ")"
+                    // Status icon with colored background
+                    @if is_success {
+                        div class="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400" {
+                            (icon::check_circle(20))
+                        }
+                    } @else if is_failed {
+                        div class="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center text-red-400" {
+                            (icon::x_circle(20))
+                        }
+                    } @else if is_in_progress {
+                        div class="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-400 animate-pulse" {
+                            (icon::rocket(20))
+                        }
+                    } @else {
+                        div class="w-10 h-10 rounded-xl bg-[var(--bg-surface)] flex items-center justify-center text-[var(--text-muted)]" {
+                            (icon::clock(20))
+                        }
+                    }
+                    
+                    div {
+                        h1 class="text-2xl font-semibold text-[var(--text-primary)] tracking-tight" { 
+                            "Deployment" 
+                        }
+                        // Commit info
+                        div class="flex items-center gap-2 mt-0.5 text-sm text-[var(--text-muted)]" {
+                            (icon::git_commit(14))
+                            code class="font-mono text-[var(--text-secondary)]" { (short_sha) }
+                            span { "on" }
+                            span class="font-medium text-[var(--text-secondary)]" { (&deployment.git_branch) }
+                            @if let Some(pr) = deployment.pr_number {
+                                span class="text-[var(--text-faint)]" { (format!("(PR #{})", pr)) }
+                            }
+                        }
+                    }
+                    
+                    // Status badge
+                    div class="ml-auto" {
+                        (status_badge)
                     }
                 }
             }
 
             // Content
-            div class="mt-10 space-y-6" {
-                // Commit info
-                (ui::card(html! {
-                    h2 class="text-sm font-medium text-stone-300 mb-4" { "Commit" }
-                    p class="text-sm text-stone-200 whitespace-pre-wrap" { (commit_message) }
-                }))
-
-                // Deployment details
-                (ui::card(html! {
-                    h2 class="text-sm font-medium text-stone-300 mb-4" { "Details" }
-
-                    dl class="space-y-3 text-sm" {
-                        div class="flex justify-between" {
-                            dt class="text-stone-500" { "Status" }
-                            dd class="text-stone-300" { (&deployment.status) }
-                        }
-                        div class="flex justify-between" {
-                            dt class="text-stone-500" { "Started" }
-                            dd class="text-stone-300" { (&deployment.started_at) }
-                        }
-                        @if let Some(finished) = &deployment.finished_at {
-                            div class="flex justify-between" {
-                                dt class="text-stone-500" { "Finished" }
-                                dd class="text-stone-300" { (finished) }
-                            }
-                        }
-                        @if let Some(url) = &deployment.url {
-                            div class="flex justify-between" {
-                                dt class="text-stone-500" { "URL" }
-                                dd {
-                                    a
-                                        href=(url)
-                                        target="_blank"
-                                        class="text-amber-400 hover:text-amber-300 no-underline"
-                                    {
-                                        (url)
+            div class="mt-8 space-y-6" {
+                // Success state with URL
+                @if is_success {
+                    @if let Some(url) = &deployment.url {
+                        (ui::card_prominent(html! {
+                            div class="flex items-center justify-between" {
+                                div class="flex items-center gap-3" {
+                                    div class="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400" {
+                                        (icon::globe(20))
+                                    }
+                                    div {
+                                        p class="text-sm font-medium text-[var(--text-primary)]" { "Deployment live" }
+                                        p class="text-xs text-[var(--text-muted)] mt-0.5" { "Your app is now accessible at:" }
                                     }
                                 }
+                                a 
+                                    href=(url)
+                                    target="_blank"
+                                    class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-[var(--text-primary)] bg-[var(--bg-base)] border border-[var(--border-default)] rounded-lg hover:border-[var(--accent)] hover:text-[var(--accent-light)] transition-colors no-underline"
+                                {
+                                    (url)
+                                    (icon::external_link(14))
+                                }
                             }
-                        }
-                        div class="flex justify-between" {
-                            dt class="text-stone-500" { "Deployment ID" }
-                            dd class="text-stone-300 font-mono text-xs" { (&deployment.id) }
-                        }
+                        }))
                     }
-                }))
+                }
 
                 // Error message (if failed)
                 @if let Some(error) = &deployment.error_message {
                     (ui::card(html! {
-                        h2 class="text-sm font-medium text-red-400 mb-4" { "Error" }
-                        pre class="text-sm text-red-300 whitespace-pre-wrap font-mono bg-red-950/30 rounded-lg p-4 overflow-x-auto" {
-                            (error)
+                        div class="flex items-start gap-3" {
+                            div class="flex-shrink-0 w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center text-red-400" {
+                                (icon::x_circle(16))
+                            }
+                            div class="min-w-0 flex-1" {
+                                h2 class="text-sm font-medium text-red-400" { "Deployment failed" }
+                                pre class="mt-3 text-sm text-red-300/80 whitespace-pre-wrap font-mono bg-red-950/20 rounded-lg p-4 overflow-x-auto border border-red-900/30" {
+                                    (error)
+                                }
+                            }
+                        }
+                    }))
+                }
+
+                // Two-column layout for commit and details
+                div class="grid md:grid-cols-2 gap-6" {
+                    // Commit info card
+                    (ui::card(html! {
+                        (ui::card_header("Commit", None))
+                        p class="text-sm text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed" { 
+                            (commit_message) 
+                        }
+                    }))
+
+                    // Deployment details card
+                    (ui::card(html! {
+                        (ui::card_header("Details", None))
+
+                        dl class="space-y-3" {
+                            (ui::detail_row("Status", html! { 
+                                span class="capitalize" { (&deployment.status) }
+                            }))
+                            (ui::detail_row("Started", html! { 
+                                span { (&deployment.started_at) }
+                            }))
+                            @if let Some(finished) = &deployment.finished_at {
+                                (ui::detail_row("Finished", html! { 
+                                    span { (finished) }
+                                }))
+                            }
+                            (ui::detail_row("ID", html! { 
+                                code class="text-xs font-mono text-[var(--text-muted)] bg-[var(--bg-surface)] px-1.5 py-0.5 rounded" { 
+                                    (&deployment.id[..8.min(deployment.id.len())]) 
+                                }
+                            }))
                         }
                     }))
                 }

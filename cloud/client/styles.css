@@ -3,45 +3,142 @@
 @source "../src/**/*.rs";
 @source "./**/*.tsx";
 
-/* Inter font */
-@import url('https://rsms.me/inter/inter.css');
+/* === Fonts === */
+/* Satoshi - geometric, modern, distinctive for headings and UI */
+@font-face {
+  font-family: 'Satoshi';
+  src: url('https://cdn.fontshare.com/wf/RVPXLBCT3FKCX5ZNQFY7FZBQIQ4DXRQN/7O3MKXHPG2KIYP47KPJNJ7TY7LRDTTPP/IVCJXB3PXFQLGDABVAGCPAHZUFPDDL7I.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
 
+@font-face {
+  font-family: 'Satoshi';
+  src: url('https://cdn.fontshare.com/wf/RVPXLBCT3FKCX5ZNQFY7FZBQIQ4DXRQN/7O3MKXHPG2KIYP47KPJNJ7TY7LRDTTPP/EM4XFKWDZ7YPNRMX4I3FLOFV3RZ7RKJP.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Satoshi';
+  src: url('https://cdn.fontshare.com/wf/RVPXLBCT3FKCX5ZNQFY7FZBQIQ4DXRQN/7O3MKXHPG2KIYP47KPJNJ7TY7LRDTTPP/2X5LVH2H4LT54MEYEEX55TMQIWH7YKYB.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* JetBrains Mono - excellent for code */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* === CSS Variables === */
+:root {
+  /* Warm neutrals - refined earth tones */
+  --bg-deepest: #0c0b0a;
+  --bg-deep: #121110;
+  --bg-base: #1a1816;
+  --bg-elevated: #221f1c;
+  --bg-surface: #2a2623;
+  --bg-hover: #332e2a;
+  
+  /* Borders with warmth */
+  --border-subtle: rgba(255, 245, 230, 0.06);
+  --border-default: rgba(255, 245, 230, 0.1);
+  --border-strong: rgba(255, 245, 230, 0.15);
+  
+  /* Text hierarchy */
+  --text-primary: #faf6f1;
+  --text-secondary: #c4bdb3;
+  --text-muted: #8c847a;
+  --text-faint: #5c564e;
+  
+  /* Accent - warm copper/amber */
+  --accent: #d97706;
+  --accent-light: #f59e0b;
+  --accent-glow: rgba(217, 119, 6, 0.15);
+  --accent-subtle: rgba(217, 119, 6, 0.08);
+  
+  /* Status colors */
+  --success: #22c55e;
+  --success-bg: rgba(34, 197, 94, 0.12);
+  --warning: #eab308;
+  --warning-bg: rgba(234, 179, 8, 0.12);
+  --error: #ef4444;
+  --error-bg: rgba(239, 68, 68, 0.12);
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 40px rgba(217, 119, 6, 0.1);
+}
+
+/* === Base Styles === */
 html {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  font-feature-settings: 'ss01' 1, 'cv01' 1;
+  font-family: 'Satoshi', system-ui, -apple-system, sans-serif;
+  letter-spacing: -0.01em;
+  background: var(--bg-deepest);
 }
 
-@supports (font-variation-settings: normal) {
-  html {
-    font-family: 'Inter var', system-ui, -apple-system, sans-serif;
-  }
+body {
+  background: var(--bg-deep);
+  color: var(--text-secondary);
+  min-height: 100vh;
 }
 
-::selection {
-  background: rgb(180 130 80 / 0.3);
-}
-
-:focus-visible {
-  outline: 2px solid rgb(180 130 80 / 0.5);
-  outline-offset: 2px;
-}
-
-/* Warm ambient glow */
+/* Subtle noise texture overlay */
 body::before {
   content: '';
   position: fixed;
-  top: -300px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 900px;
-  height: 600px;
-  background: radial-gradient(ellipse 50% 50% at center, rgb(180 130 80 / 0.04), transparent);
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  opacity: 0.015;
   pointer-events: none;
   z-index: 0;
 }
 
+/* Warm ambient glow - top center */
+body::after {
+  content: '';
+  position: fixed;
+  top: -200px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1000px;
+  height: 600px;
+  background: radial-gradient(
+    ellipse 60% 50% at center,
+    rgba(217, 119, 6, 0.06) 0%,
+    rgba(217, 119, 6, 0.02) 40%,
+    transparent 70%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Selection */
+::selection {
+  background: rgba(217, 119, 6, 0.3);
+  color: var(--text-primary);
+}
+
+/* Focus styles */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Code/mono font */
+code, pre, .font-mono {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-feature-settings: 'liga' 1, 'calt' 1;
+}
+
+/* === Scrollbar === */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
@@ -49,29 +146,192 @@ body::before {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgb(120 100 80 / 0.2);
-  border-radius: 4px;
+  background: var(--border-default);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgb(120 100 80 / 0.3);
+  background: var(--border-strong);
+  background-clip: content-box;
 }
 
-/* Custom checkbox styles */
+/* === Custom Form Controls === */
+
+/* Checkbox */
+.checkbox-input:checked + .checkbox-box {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
+  border-color: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
 .checkbox-input:checked + .checkbox-box svg {
   opacity: 1;
 }
 
-.checkbox-input:checked + .checkbox-box {
-  background-color: rgb(217 119 6); /* amber-600 */
-  border-color: rgb(217 119 6);
-}
-
-/* Custom toggle styles */
+/* Toggle */
 .toggle-input:checked + .toggle-track {
-  background-color: rgb(217 119 6); /* amber-600 */
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
+  box-shadow: 0 0 12px var(--accent-glow);
 }
 
 .toggle-input:checked + .toggle-track .toggle-knob {
   transform: translateX(1rem);
+}
+
+/* === Animations === */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { 
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from { 
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to { 
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Utility classes for animations */
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.4s ease-out forwards;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out forwards;
+}
+
+/* Stagger children animations */
+.stagger-children > * {
+  opacity: 0;
+  animation: slideUp 0.4s ease-out forwards;
+}
+
+.stagger-children > *:nth-child(1) { animation-delay: 0.05s; }
+.stagger-children > *:nth-child(2) { animation-delay: 0.1s; }
+.stagger-children > *:nth-child(3) { animation-delay: 0.15s; }
+.stagger-children > *:nth-child(4) { animation-delay: 0.2s; }
+.stagger-children > *:nth-child(5) { animation-delay: 0.25s; }
+.stagger-children > *:nth-child(6) { animation-delay: 0.3s; }
+.stagger-children > *:nth-child(7) { animation-delay: 0.35s; }
+.stagger-children > *:nth-child(8) { animation-delay: 0.4s; }
+.stagger-children > *:nth-child(9) { animation-delay: 0.45s; }
+.stagger-children > *:nth-child(10) { animation-delay: 0.5s; }
+
+/* === Card hover effects === */
+.card-hover {
+  transition: all 0.2s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md), var(--shadow-glow);
+}
+
+/* === Gradient text === */
+.gradient-text {
+  background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent-light) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* === Button shine effect === */
+.btn-shine {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-shine::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 100%
+  );
+  transition: left 0.5s ease;
+}
+
+.btn-shine:hover::after {
+  left: 100%;
+}
+
+/* === Input glow on focus === */
+.input-glow:focus {
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+
+/* === Status pulse === */
+.status-pulse {
+  animation: pulse-subtle 2s ease-in-out infinite;
+}
+
+/* === Loading skeleton === */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-surface) 25%,
+    var(--bg-hover) 50%,
+    var(--bg-surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* === Tailwind theme extensions via @theme === */
+@theme {
+  --color-bg-deepest: var(--bg-deepest);
+  --color-bg-deep: var(--bg-deep);
+  --color-bg-base: var(--bg-base);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-bg-surface: var(--bg-surface);
+  --color-bg-hover: var(--bg-hover);
+  
+  --color-border-subtle: var(--border-subtle);
+  --color-border-default: var(--border-default);
+  --color-border-strong: var(--border-strong);
+  
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-faint: var(--text-faint);
+  
+  --color-accent: var(--accent);
+  --color-accent-light: var(--accent-light);
 }

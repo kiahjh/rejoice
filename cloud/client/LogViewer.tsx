@@ -13,6 +13,7 @@ export default function LogViewer(props: LogViewerProps) {
   const [status, setStatus] = createSignal(props.initialStatus);
   const [finished, setFinished] = createSignal(props.initialFinished);
   const [userScrolledUp, setUserScrolledUp] = createSignal(false);
+  const [expanded, setExpanded] = createSignal(true);
 
   let containerRef: HTMLPreElement | undefined;
   let pollInterval: number | undefined;
@@ -21,7 +22,6 @@ export default function LogViewer(props: LogViewerProps) {
   const handleScroll = () => {
     if (!containerRef) return;
     const { scrollTop, scrollHeight, clientHeight } = containerRef;
-    // Consider "at bottom" if within 50px of the bottom
     const atBottom = scrollHeight - scrollTop - clientHeight < 50;
     setUserScrolledUp(!atBottom);
   };
@@ -50,16 +50,12 @@ export default function LogViewer(props: LogViewerProps) {
       setStatus(data.status);
       setFinished(data.finished);
 
-      // Scroll to bottom after updating logs
       requestAnimationFrame(scrollToBottom);
 
-      // Stop polling and refresh page if deployment just finished
       if (data.finished && pollInterval) {
         clearInterval(pollInterval);
         pollInterval = undefined;
         
-        // If deployment just finished (was in progress before), refresh the page
-        // after a short delay so user can see the final status
         if (wasInProgress) {
           setTimeout(() => {
             window.location.reload();
@@ -73,14 +69,12 @@ export default function LogViewer(props: LogViewerProps) {
 
   // Start polling on mount
   onMount(() => {
-    // Initial scroll to bottom
     requestAnimationFrame(() => {
       if (containerRef) {
         containerRef.scrollTop = containerRef.scrollHeight;
       }
     });
 
-    // Only poll if not finished
     if (!props.initialFinished) {
       pollInterval = setInterval(fetchLogs, 1500) as unknown as number;
     }
@@ -96,36 +90,41 @@ export default function LogViewer(props: LogViewerProps) {
   // Status badge styling
   const statusBadge = () => {
     const s = status();
+    const baseClasses = "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium border";
+    
     switch (s) {
       case "pending":
         return (
-          <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-stone-700 text-stone-300">
+          <span class={`${baseClasses} bg-[var(--bg-surface)] text-[var(--text-muted)] border-[var(--border-default)]`}>
+            <span class="w-1.5 h-1.5 rounded-full bg-[var(--text-faint)]" />
             Pending
           </span>
         );
       case "building":
       case "deploying":
         return (
-          <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-900/50 text-amber-200">
-            <span class="mr-1.5 h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+          <span class={`${baseClasses} bg-amber-500/10 text-amber-400 border-amber-500/20`}>
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
             {s === "building" ? "Building" : "Deploying"}
           </span>
         );
       case "success":
         return (
-          <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-900/50 text-green-200">
-            Live
+          <span class={`${baseClasses} bg-emerald-500/10 text-emerald-400 border-emerald-500/20`}>
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            Complete
           </span>
         );
       case "failed":
         return (
-          <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-900/50 text-red-200">
+          <span class={`${baseClasses} bg-red-500/10 text-red-400 border-red-500/20`}>
+            <span class="w-1.5 h-1.5 rounded-full bg-red-400" />
             Failed
           </span>
         );
       default:
         return (
-          <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-stone-700 text-stone-300">
+          <span class={`${baseClasses} bg-[var(--bg-surface)] text-[var(--text-muted)] border-[var(--border-default)]`}>
             {s}
           </span>
         );
@@ -133,44 +132,81 @@ export default function LogViewer(props: LogViewerProps) {
   };
 
   return (
-    <div class="rounded-lg border border-stone-800 bg-stone-900 overflow-hidden">
-      <div class="flex items-center justify-between px-4 py-3 border-b border-stone-800">
-        <h2 class="text-sm font-medium text-stone-300">Build logs</h2>
+    <div class="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] overflow-hidden shadow-sm">
+      {/* Header */}
+      <div 
+        class="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] cursor-pointer hover:bg-[var(--bg-hover)] transition-colors"
+        onClick={() => setExpanded(!expanded())}
+      >
+        <div class="flex items-center gap-3">
+          {/* Terminal icon */}
+          <div class="w-6 h-6 rounded-md bg-[var(--bg-base)] flex items-center justify-center text-[var(--text-faint)]">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="4 17 10 11 4 5" />
+              <line x1="12" y1="19" x2="20" y2="19" />
+            </svg>
+          </div>
+          <h2 class="text-sm font-medium text-[var(--text-primary)]">Build logs</h2>
+        </div>
         <div class="flex items-center gap-3">
           {!finished() && (
-            <span class="text-xs text-stone-500">Auto-updating...</span>
+            <span class="flex items-center gap-1.5 text-xs text-[var(--text-faint)]">
+              <span class="w-1 h-1 rounded-full bg-amber-400 animate-pulse" />
+              Live
+            </span>
           )}
           {statusBadge()}
+          {/* Expand/collapse icon */}
+          <span class={`text-[var(--text-faint)] transition-transform duration-200 ${expanded() ? '' : '-rotate-90'}`}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </span>
         </div>
       </div>
-      <pre
-        ref={containerRef}
-        onScroll={handleScroll}
-        class="text-xs text-stone-400 whitespace-pre-wrap font-mono bg-stone-950 p-4 overflow-x-auto h-96 overflow-y-auto"
-      >
-        {logs() || (
-          <span class="text-stone-500">
-            {status() === "pending"
-              ? "Waiting to start..."
-              : status() === "building" || status() === "deploying"
-              ? "Build starting..."
-              : "No logs available"}
-          </span>
-        )}
-      </pre>
-      {userScrolledUp() && !finished() && (
-        <div class="absolute bottom-4 right-4">
-          <button
-            onClick={() => {
-              setUserScrolledUp(false);
-              if (containerRef) {
-                containerRef.scrollTop = containerRef.scrollHeight;
-              }
-            }}
-            class="px-3 py-1.5 text-xs font-medium bg-stone-800 text-stone-300 rounded-lg border border-stone-700 hover:bg-stone-700 transition-colors shadow-lg"
+      
+      {/* Log content */}
+      {expanded() && (
+        <div class="relative">
+          <pre
+            ref={containerRef}
+            onScroll={handleScroll}
+            class="text-xs text-[var(--text-muted)] whitespace-pre-wrap font-mono bg-[var(--bg-deepest)] p-4 h-[400px] overflow-auto leading-relaxed"
           >
-            Scroll to bottom
-          </button>
+            {logs() || (
+              <span class="text-[var(--text-faint)]">
+                {status() === "pending"
+                  ? "Waiting to start..."
+                  : status() === "building" || status() === "deploying"
+                  ? "Build starting..."
+                  : "No logs available"}
+              </span>
+            )}
+          </pre>
+          
+          {/* Scroll to bottom button */}
+          {userScrolledUp() && !finished() && (
+            <div class="absolute bottom-4 right-4">
+              <button
+                onClick={() => {
+                  setUserScrolledUp(false);
+                  if (containerRef) {
+                    containerRef.scrollTop = containerRef.scrollHeight;
+                  }
+                }}
+                class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[var(--bg-surface)] text-[var(--text-secondary)] rounded-lg border border-[var(--border-default)] hover:bg-[var(--bg-hover)] hover:border-[var(--border-strong)] transition-all shadow-lg"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <polyline points="19 12 12 19 5 12" />
+                </svg>
+                Scroll to bottom
+              </button>
+            </div>
+          )}
+          
+          {/* Gradient fade at top */}
+          <div class="absolute top-0 left-0 right-0 h-6 bg-gradient-to-b from-[var(--bg-deepest)] to-transparent pointer-events-none" />
         </div>
       )}
     </div>

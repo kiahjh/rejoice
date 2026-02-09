@@ -1,4 +1,4 @@
-use crate::components::{self as ui, ButtonSize, ButtonVariant};
+use crate::components::{self as ui, icon, ButtonSize, ButtonVariant};
 use crate::AppState;
 use rejoice::db::{query, query_as, FromRow};
 use rejoice::{html, Markup, Req, Res};
@@ -64,29 +64,41 @@ pub async fn get(state: AppState, req: Req, res: Res) -> Res {
 
 fn render_install_prompt() -> Markup {
     html! {
-        div class="max-w-md mx-auto px-6 py-10" {
-            a href="/projects" class="text-sm text-stone-500 hover:text-stone-300 no-underline" {
-                "← Back"
-            }
+        div class="max-w-lg mx-auto px-6 py-10" {
+            (ui::back_link("/projects", "Projects"))
             
-            h1 class="mt-6 text-xl font-medium text-stone-100" { "Connect GitHub" }
-            
-            p class="mt-4 text-stone-400" {
-                "To create a project, you need to install the Rejoice Cloud GitHub App on your account. "
-                "This allows us to access your repositories and deploy your code."
-            }
-            
-            div class="mt-8" {
-                a 
-                    href="https://github.com/apps/rejoice-cloud-dev/installations/new"
-                    class="inline-flex items-center justify-center h-10 px-5 text-sm font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-500 transition-colors no-underline"
-                {
-                    "Install GitHub App"
+            div class="mt-10 text-center" {
+                // Icon
+                div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-default)] mb-6" {
+                    (icon::github(32))
                 }
-            }
-            
-            p class="mt-4 text-xs text-stone-500" {
-                "You'll be redirected to GitHub to authorize the app."
+                
+                h1 class="text-2xl font-semibold text-[var(--text-primary)] tracking-tight" { 
+                    "Connect GitHub" 
+                }
+                
+                p class="mt-3 text-[var(--text-secondary)] max-w-sm mx-auto" {
+                    "Install the Rejoice Cloud GitHub App to grant access to your repositories and enable automatic deployments."
+                }
+                
+                div class="mt-8" {
+                    a 
+                        href="https://github.com/apps/rejoice-cloud-dev/installations/new"
+                        class="inline-flex items-center justify-center gap-2 h-11 px-6 text-sm font-medium rounded-xl \
+                               bg-gradient-to-b from-amber-500 to-amber-600 text-white \
+                               shadow-md shadow-amber-900/25 \
+                               hover:from-amber-400 hover:to-amber-500 \
+                               hover:shadow-lg hover:shadow-amber-900/30 \
+                               transition-all no-underline"
+                    {
+                        (icon::github(18))
+                        "Install GitHub App"
+                    }
+                }
+                
+                p class="mt-4 text-xs text-[var(--text-faint)]" {
+                    "You'll be redirected to GitHub to authorize the app."
+                }
             }
         }
     }
@@ -94,24 +106,36 @@ fn render_install_prompt() -> Markup {
 
 fn render_error(message: &str) -> Markup {
     html! {
-        div class="max-w-md mx-auto px-6 py-10" {
-            a href="/projects" class="text-sm text-stone-500 hover:text-stone-300 no-underline" {
-                "← Back"
-            }
+        div class="max-w-lg mx-auto px-6 py-10" {
+            (ui::back_link("/projects", "Projects"))
             
-            h1 class="mt-6 text-xl font-medium text-stone-100" { "Error" }
-            
-            p class="mt-4 text-red-400" {
-                (message)
-            }
-            
-            div class="mt-8 flex gap-3" {
-                (ui::button_link("/projects", "Back to Projects", ButtonVariant::Secondary, ButtonSize::Medium))
-                a 
-                    href="https://github.com/apps/rejoice-cloud-dev/installations/new"
-                    class="inline-flex items-center justify-center h-9 px-4 text-sm font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-500 transition-colors no-underline"
-                {
-                    "Reinstall GitHub App"
+            div class="mt-10" {
+                // Error card
+                (ui::card(html! {
+                    div class="flex items-start gap-3" {
+                        div class="flex-shrink-0 w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center text-red-400" {
+                            (icon::x_circle(20))
+                        }
+                        div {
+                            h1 class="text-lg font-semibold text-[var(--text-primary)]" { "Unable to load repositories" }
+                            p class="mt-2 text-sm text-red-400/80" {
+                                (message)
+                            }
+                        }
+                    }
+                }))
+                
+                div class="mt-6 flex gap-3" {
+                    (ui::button_link("/projects", "Back to Projects", ButtonVariant::Secondary, ButtonSize::Medium))
+                    a 
+                        href="https://github.com/apps/rejoice-cloud-dev/installations/new"
+                        class="inline-flex items-center justify-center gap-2 h-9 px-4 text-sm font-medium rounded-lg \
+                               bg-gradient-to-b from-amber-500 to-amber-600 text-white \
+                               hover:from-amber-400 hover:to-amber-500 \
+                               transition-all no-underline"
+                    {
+                        "Reinstall GitHub App"
+                    }
                 }
             }
         }
@@ -120,63 +144,107 @@ fn render_error(message: &str) -> Markup {
 
 fn render_repo_selector(repos: &[crate::github::Repository]) -> Markup {
     html! {
-        div class="max-w-lg mx-auto px-6 py-10" {
-            a href="/projects" class="text-sm text-stone-500 hover:text-stone-300 no-underline" {
-                "← Back"
-            }
+        div class="max-w-xl mx-auto px-6 py-10" {
+            (ui::back_link("/projects", "Projects"))
             
-            h1 class="mt-6 text-xl font-medium text-stone-100" { "New project" }
-            p class="mt-2 text-stone-400" { 
-                "Select a repository to deploy" 
-                span class="text-stone-500" { (format!(" ({} available)", repos.len())) }
+            div class="mt-6" {
+                h1 class="text-2xl font-semibold text-[var(--text-primary)] tracking-tight" { 
+                    "New project" 
+                }
+                p class="mt-2 text-[var(--text-muted)]" { 
+                    "Select a repository to deploy" 
+                    span class="text-[var(--text-faint)]" { (format!(" ({} available)", repos.len())) }
+                }
             }
             
             @if repos.is_empty() {
-                div class="mt-8 p-6 rounded-lg border border-stone-800 text-center" {
-                    p class="text-stone-400" { "No repositories found." }
-                    p class="mt-2 text-sm text-stone-500" {
-                        "Make sure you've granted access to your repositories when installing the GitHub App."
-                    }
-                    a 
-                        href="https://github.com/apps/rejoice-cloud-dev/installations/new"
-                        class="mt-4 inline-block text-sm text-amber-500 hover:text-amber-400"
-                    {
-                        "Configure repository access"
-                    }
+                // Empty state
+                div class="mt-8" {
+                    (ui::card(html! {
+                        div class="py-8 text-center" {
+                            div class="text-[var(--text-faint)] mb-3" {
+                                (icon::folder(32))
+                            }
+                            p class="text-sm text-[var(--text-muted)]" { "No repositories found" }
+                            p class="text-xs text-[var(--text-faint)] mt-1 max-w-xs mx-auto" {
+                                "Make sure you've granted access to your repositories when installing the GitHub App."
+                            }
+                            a 
+                                href="https://github.com/apps/rejoice-cloud-dev/installations/new"
+                                class="mt-4 inline-flex items-center gap-1.5 text-sm text-[var(--accent)] hover:text-[var(--accent-light)] no-underline transition-colors"
+                            {
+                                "Configure repository access"
+                                span { "→" }
+                            }
+                        }
+                    }))
                 }
             } @else {
                 // Search input
                 div class="mt-6" {
-                    input 
-                        type="text"
-                        id="repo-search"
-                        placeholder="Search repositories..."
-                        autocomplete="off"
-                        class="w-full px-4 py-2.5 bg-stone-900 border border-stone-700 rounded-lg text-stone-100 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:border-transparent"
-                    {}
+                    div class="relative" {
+                        div class="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-faint)] pointer-events-none" {
+                            svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" {
+                                circle cx="11" cy="11" r="8" {}
+                                line x1="21" y1="21" x2="16.65" y2="16.65" {}
+                            }
+                        }
+                        input 
+                            type="text"
+                            id="repo-search"
+                            placeholder="Search repositories..."
+                            autocomplete="off"
+                            class="w-full h-11 pl-10 pr-4 text-sm \
+                                   bg-[var(--bg-base)] border border-[var(--border-default)] rounded-xl \
+                                   text-[var(--text-primary)] placeholder-[var(--text-faint)] \
+                                   outline-none transition-all duration-150 \
+                                   hover:border-[var(--border-strong)] \
+                                   focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-subtle)]"
+                        {}
+                    }
                 }
                 
                 // Repo list
-                div id="repo-list" class="mt-4 space-y-2 max-h-96 overflow-y-auto" {
+                div id="repo-list" class="mt-4 space-y-2 max-h-[480px] overflow-y-auto pr-1" {
                     @for repo in repos {
                         form method="post" class="block repo-item" data-repo-name=(repo.full_name.to_lowercase()) {
                             input type="hidden" name="github_repo" value=(repo.full_name);
                             input type="hidden" name="name" value=(repo.name);
                             button 
                                 type="submit"
-                                class="w-full text-left p-4 rounded-lg border border-stone-800 hover:border-stone-700 hover:bg-stone-900/50 transition-colors"
+                                class="group w-full text-left p-4 rounded-xl \
+                                       bg-[var(--bg-elevated)] border border-[var(--border-subtle)] \
+                                       hover:bg-[var(--bg-surface)] hover:border-[var(--border-default)] \
+                                       transition-all duration-150 cursor-pointer"
                             {
-                                div class="flex items-center justify-between" {
-                                    div {
-                                        span class="font-medium text-stone-100" { (repo.full_name) }
-                                        @if repo.private {
-                                            span class="ml-2 text-xs px-1.5 py-0.5 rounded bg-stone-800 text-stone-400" {
-                                                "private"
+                                div class="flex items-center justify-between gap-3" {
+                                    div class="flex items-center gap-3 min-w-0" {
+                                        // Repo icon
+                                        div class="flex-shrink-0 w-9 h-9 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] flex items-center justify-center text-[var(--text-faint)] group-hover:border-[var(--border-default)] transition-colors" {
+                                            (icon::folder(16))
+                                        }
+                                        
+                                        div class="min-w-0" {
+                                            div class="flex items-center gap-2" {
+                                                span class="font-medium text-[var(--text-primary)] truncate group-hover:text-[var(--accent-light)] transition-colors" { 
+                                                    (repo.full_name) 
+                                                }
+                                                @if repo.private {
+                                                    span class="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-surface)] text-[var(--text-faint)] border border-[var(--border-subtle)]" {
+                                                        "private"
+                                                    }
+                                                }
+                                            }
+                                            div class="flex items-center gap-2 mt-0.5 text-xs text-[var(--text-faint)]" {
+                                                (icon::git_branch(12))
+                                                span { (repo.default_branch) }
                                             }
                                         }
                                     }
-                                    span class="text-stone-500 text-sm" {
-                                        (repo.default_branch)
+                                    
+                                    // Arrow on hover
+                                    span class="flex-shrink-0 text-[var(--text-faint)] opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-150" {
+                                        (icon::arrow_right(16))
                                     }
                                 }
                             }
@@ -185,8 +253,12 @@ fn render_repo_selector(repos: &[crate::github::Repository]) -> Markup {
                 }
                 
                 // No results message (hidden by default)
-                p id="no-results" class="mt-4 text-center text-stone-500 hidden" {
-                    "No repositories match your search."
+                div id="no-results" class="hidden mt-8" {
+                    (ui::card(html! {
+                        div class="py-6 text-center" {
+                            p class="text-sm text-[var(--text-muted)]" { "No repositories match your search." }
+                        }
+                    }))
                 }
                 
                 // Search script

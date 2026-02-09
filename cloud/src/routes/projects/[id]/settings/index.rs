@@ -1,4 +1,4 @@
-use crate::components::{self as ui, BadgeVariant, ButtonSize, ButtonVariant};
+use crate::components::{self as ui, icon, BadgeVariant, ButtonSize, ButtonVariant};
 use crate::crypto;
 use crate::AppState;
 use rejoice::db::{query_as, FromRow};
@@ -59,63 +59,109 @@ pub async fn get(state: AppState, req: Req, res: Res, id: String) -> Res {
     .unwrap_or_default();
 
     res.html(html! {
-        div class="max-w-3xl mx-auto px-6 py-10" {
+        div class="max-w-4xl mx-auto px-6 py-10" {
             // Back link
-            a href=(format!("/projects/{}", id)) class="text-sm text-stone-500 hover:text-stone-300 no-underline" {
-                "← " (&project.name)
-            }
+            (ui::back_link(&format!("/projects/{}", id), &project.name))
 
             // Header
             div class="mt-6 mb-10" {
-                h1 class="text-xl font-medium text-stone-100" { "Settings" }
+                div class="flex items-center gap-3" {
+                    div class="w-10 h-10 rounded-xl bg-[var(--bg-surface)] flex items-center justify-center text-[var(--text-muted)]" {
+                        (icon::settings(20))
+                    }
+                    div {
+                        h1 class="text-2xl font-semibold text-[var(--text-primary)] tracking-tight" { "Settings" }
+                        p class="text-sm text-[var(--text-muted)]" { "Configure your project settings" }
+                    }
+                }
             }
 
-            // Environment Variables Section
-            (ui::card(html! {
-                div class="flex items-center justify-between mb-6" {
-                    div {
-                        h2 class="text-sm font-medium text-stone-300" { "Environment Variables" }
-                        p class="text-xs text-stone-500 mt-1" { "Secrets are encrypted at rest and injected at deploy time." }
-                    }
-                }
+            // Main content
+            div class="space-y-8" {
+                // Environment Variables Section
+                (ui::card(html! {
+                    (ui::card_header(
+                        "Environment Variables",
+                        Some("Encrypted at rest and injected at deploy time. Changes require a new deployment.")
+                    ))
 
-                // Add new env var form
-                form
-                    method="POST"
-                    action=(format!("/projects/{}/settings/env", id))
-                    class="flex items-center gap-3 mb-6"
-                {
-                    div class="flex-1" {
-                        (ui::input("key", "KEY"))
-                    }
-                    div class="flex-1" {
-                        (ui::input_password("value", "value"))
-                    }
-                    (ui::checkbox("preview_only", "Preview only", false))
-                    (ui::button_submit("Add", ButtonVariant::Primary, ButtonSize::Medium))
-                }
-
-                // Existing env vars list
-                @if env_vars.is_empty() {
-                    p class="text-sm text-stone-500 text-center py-4" { "No environment variables configured." }
-                } @else {
-                    div class="space-y-2" {
-                        @for env_var in &env_vars {
-                            (env_var_row(&project.id, env_var, &state.encryption_key))
+                    // Add new env var form
+                    form
+                        method="POST"
+                        action=(format!("/projects/{}/settings/env", id))
+                        class="mb-6"
+                    {
+                        div class="grid grid-cols-[1fr_1fr_auto_auto] gap-3 items-end" {
+                            div {
+                                label class="block text-xs font-medium text-[var(--text-muted)] mb-1.5" { "Key" }
+                                input
+                                    type="text"
+                                    name="key"
+                                    placeholder="VARIABLE_NAME"
+                                    autocomplete="off"
+                                    class="w-full h-10 px-3.5 text-sm font-mono uppercase \
+                                           bg-[var(--bg-base)] border border-[var(--border-default)] rounded-lg \
+                                           text-[var(--text-primary)] placeholder-[var(--text-faint)] \
+                                           outline-none transition-all duration-150 \
+                                           hover:border-[var(--border-strong)] \
+                                           focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-subtle)]";
+                            }
+                            div {
+                                label class="block text-xs font-medium text-[var(--text-muted)] mb-1.5" { "Value" }
+                                (ui::input_password("value", "Secret value"))
+                            }
+                            div {
+                                label class="block text-xs font-medium text-[var(--text-muted)] mb-1.5 invisible" { "Preview" }
+                                div class="h-10 flex items-center" {
+                                    (ui::checkbox("preview_only", "Preview only", false))
+                                }
+                            }
+                            div {
+                                label class="block text-xs font-medium text-[var(--text-muted)] mb-1.5 invisible" { "Add" }
+                                (ui::button_submit("Add", ButtonVariant::Primary, ButtonSize::Medium))
+                            }
                         }
                     }
-                }
-            }))
 
-            // Danger Zone
-            div class="mt-10" {
+                    (ui::card_divider())
+
+                    // Existing env vars list
+                    @if env_vars.is_empty() {
+                        div class="py-8 text-center" {
+                            div class="flex justify-center text-[var(--text-faint)] mb-3" {
+                                (icon::key(32))
+                            }
+                            p class="text-sm text-[var(--text-muted)]" { "No environment variables configured" }
+                            p class="text-xs text-[var(--text-faint)] mt-1" { "Add variables above to get started." }
+                        }
+                    } @else {
+                        div class="space-y-1" {
+                            // Header row
+                            div class="grid grid-cols-[1fr_1fr_auto_auto] gap-3 px-3 py-2 text-xs font-medium text-[var(--text-faint)] uppercase tracking-wider" {
+                                span { "Key" }
+                                span { "Value" }
+                                span { "Scope" }
+                                span { "" }
+                            }
+                            
+                            @for env_var in &env_vars {
+                                (env_var_row(&project.id, env_var, &state.encryption_key))
+                            }
+                        }
+                    }
+                }))
+
+                // Danger Zone
                 (ui::card(html! {
-                    h2 class="text-sm font-medium text-red-400 mb-4" { "Danger Zone" }
-
-                    div class="flex items-center justify-between" {
-                        div {
-                            p class="text-sm text-stone-300" { "Delete this project" }
-                            p class="text-xs text-stone-500 mt-1" { "This action cannot be undone. All deployments will be stopped." }
+                    div class="flex items-start gap-3" {
+                        div class="flex-shrink-0 w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center text-red-400" {
+                            (icon::trash(16))
+                        }
+                        div class="flex-1" {
+                            h2 class="text-sm font-medium text-red-400" { "Danger Zone" }
+                            p class="text-xs text-[var(--text-muted)] mt-1" { 
+                                "Permanently delete this project and all its deployments. This action cannot be undone."
+                            }
                         }
                         form method="POST" action=(format!("/projects/{}/delete", id)) {
                             (ui::button_submit("Delete project", ButtonVariant::Danger, ButtonSize::Small))
@@ -133,30 +179,31 @@ fn env_var_row(project_id: &str, env_var: &EnvVar, key: &[u8; 32]) -> rejoice::M
     let masked = mask_value(&decrypted);
 
     html! {
-        div class="flex items-center gap-3 py-2 px-3 -mx-3 rounded-lg hover:bg-stone-800/30" {
+        div class="group grid grid-cols-[1fr_1fr_auto_auto] gap-3 items-center px-3 py-2.5 rounded-lg hover:bg-[var(--bg-surface)] transition-colors" {
             // Key name
-            code class="text-sm font-mono text-stone-200 w-48 truncate" { (&env_var.key) }
+            code class="text-sm font-mono text-[var(--text-primary)] truncate" { (&env_var.key) }
 
             // Masked value
-            code class="text-sm font-mono text-stone-500 flex-1 truncate" { (masked) }
+            code class="text-sm font-mono text-[var(--text-faint)] truncate" { (masked) }
 
-            // Preview only badge
+            // Preview only badge or All badge
             @if env_var.is_preview_only {
-                (ui::badge("Preview", BadgeVariant::Default))
+                (ui::badge("Preview", BadgeVariant::Accent))
+            } @else {
+                (ui::badge("All", BadgeVariant::Default))
             }
 
             // Delete button
             form
                 method="POST"
                 action=(format!("/projects/{}/settings/env/{}/delete", project_id, env_var.id))
-                class="flex-shrink-0"
             {
                 button
                     type="submit"
-                    class="text-stone-500 hover:text-red-400 transition-colors p-1"
+                    class="p-1.5 rounded-md text-[var(--text-faint)] hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100"
                     title="Delete"
                 {
-                    (ui::icon::trash(16))
+                    (icon::trash(14))
                 }
             }
         }
@@ -170,5 +217,3 @@ fn mask_value(value: &str) -> String {
         format!("{}...", "*".repeat(4))
     }
 }
-
-

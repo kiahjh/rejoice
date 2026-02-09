@@ -14,20 +14,40 @@ pub enum ButtonSize {
     Small,
     #[default]
     Medium,
+    Large,
 }
 
 impl ButtonVariant {
     fn classes(&self) -> &'static str {
         match self {
-            // Warm copper/bronze primary
-            ButtonVariant::Primary => "bg-amber-600 text-white hover:bg-amber-500",
-            ButtonVariant::Secondary => {
-                "bg-stone-800 text-stone-200 ring-1 ring-inset ring-stone-700 hover:bg-stone-700"
-            }
-            ButtonVariant::Ghost => "text-stone-400 hover:text-stone-200 hover:bg-stone-800",
-            ButtonVariant::Danger => {
-                "bg-red-900/50 text-red-400 ring-1 ring-inset ring-red-800 hover:bg-red-900/70"
-            }
+            // Primary - warm gradient with glow
+            ButtonVariant::Primary => "\
+                bg-gradient-to-b from-amber-500 to-amber-600 \
+                text-white font-medium \
+                shadow-md shadow-amber-900/25 \
+                hover:from-amber-400 hover:to-amber-500 \
+                hover:shadow-lg hover:shadow-amber-900/30 \
+                active:from-amber-600 active:to-amber-700 \
+                btn-shine",
+            // Secondary - subtle surface with border
+            ButtonVariant::Secondary => "\
+                bg-[var(--bg-surface)] \
+                text-[var(--text-secondary)] \
+                border border-[var(--border-default)] \
+                hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] \
+                active:bg-[var(--bg-surface)]",
+            // Ghost - minimal, just hover state
+            ButtonVariant::Ghost => "\
+                text-[var(--text-muted)] \
+                hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] \
+                active:bg-[var(--bg-elevated)]",
+            // Danger - red accent
+            ButtonVariant::Danger => "\
+                bg-[var(--error-bg)] \
+                text-red-400 \
+                border border-red-900/50 \
+                hover:bg-red-950/50 hover:text-red-300 hover:border-red-800/50 \
+                active:bg-red-950/70",
         }
     }
 }
@@ -35,14 +55,15 @@ impl ButtonVariant {
 impl ButtonSize {
     fn classes(&self) -> &'static str {
         match self {
-            ButtonSize::Small => "h-8 px-3 text-sm gap-1.5",
-            ButtonSize::Medium => "h-9 px-4 text-sm gap-2",
+            ButtonSize::Small => "h-8 px-3 text-sm gap-1.5 rounded-lg",
+            ButtonSize::Medium => "h-9 px-4 text-sm gap-2 rounded-lg",
+            ButtonSize::Large => "h-11 px-5 text-base gap-2.5 rounded-xl",
         }
     }
 }
 
 fn base_classes() -> &'static str {
-    "inline-flex items-center justify-center font-medium rounded-lg transition-colors cursor-pointer"
+    "inline-flex items-center justify-center font-medium transition-all duration-150 cursor-pointer select-none"
 }
 
 pub fn button(label: &str, variant: ButtonVariant, size: ButtonSize) -> Markup {
@@ -94,12 +115,17 @@ pub fn github_button(href: &str) -> Markup {
     html! {
         a
             href=(href)
-            class="inline-flex items-center justify-center gap-2 h-10 px-5 \
-                   text-sm font-medium rounded-lg \
-                   bg-white text-stone-900 hover:bg-stone-100 \
-                   transition-colors no-underline cursor-pointer"
+            class="group inline-flex items-center justify-center gap-2.5 h-12 px-6 \
+                   text-sm font-medium rounded-xl \
+                   bg-white text-[#0d0d0d] \
+                   shadow-lg shadow-black/20 \
+                   hover:bg-gray-100 hover:shadow-xl hover:shadow-black/25 \
+                   active:bg-gray-200 active:shadow-md \
+                   transition-all duration-150 no-underline cursor-pointer"
         {
-            (super::icon::github(18))
+            span class="group-hover:scale-110 transition-transform duration-150" {
+                (super::icon::github(20))
+            }
             "Continue with GitHub"
         }
     }
@@ -107,13 +133,13 @@ pub fn github_button(href: &str) -> Markup {
 
 pub fn nav_link(href: &str, label: &str, is_active: bool) -> Markup {
     let state = if is_active {
-        "text-stone-100"
+        "text-[var(--text-primary)] bg-[var(--bg-surface)]"
     } else {
-        "text-stone-400 hover:text-stone-200"
+        "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)]"
     };
 
     html! {
-        a href=(href) class=(format!("text-sm font-medium transition-colors no-underline cursor-pointer {}", state)) {
+        a href=(href) class=(format!("px-3 py-2 text-sm font-medium rounded-lg transition-all duration-150 no-underline cursor-pointer {}", state)) {
             (label)
         }
     }
@@ -121,13 +147,13 @@ pub fn nav_link(href: &str, label: &str, is_active: bool) -> Markup {
 
 pub fn nav_link_with_icon(href: &str, label: &str, icon: Markup, is_active: bool) -> Markup {
     let state = if is_active {
-        "text-stone-100"
+        "text-[var(--text-primary)] bg-[var(--bg-surface)]"
     } else {
-        "text-stone-400 hover:text-stone-200"
+        "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)]"
     };
 
     html! {
-        a href=(href) class=(format!("inline-flex items-center gap-2 text-sm font-medium transition-colors no-underline cursor-pointer {}", state)) {
+        a href=(href) class=(format!("inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-all duration-150 no-underline cursor-pointer {}", state)) {
             (icon)
             (label)
         }
