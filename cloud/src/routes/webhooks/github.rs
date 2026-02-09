@@ -305,6 +305,8 @@ async fn run_deployment(
     deployment_id: String,
     github_app: crate::github::GitHubApp,
 ) {
+    let fly_app_name = config.fly_app_name.clone();
+
     // Run the deployment with streaming logs
     let result =
         crate::deployer::deploy(config, Some(db.clone()), Some(deployment_id.clone()), Some(github_app)).await;
@@ -323,6 +325,15 @@ async fn run_deployment(
         )
         .bind(&result.url)
         .bind(&result.logs)
+        .bind(&deployment_id)
+        .execute(&db)
+        .await;
+
+        // Ensure fly_app_name is set on the project (safety net)
+        let _ = query(
+            "UPDATE projects SET fly_app_name = ? WHERE id = (SELECT project_id FROM deployments WHERE id = ?) AND (fly_app_name IS NULL OR fly_app_name = '')",
+        )
+        .bind(&fly_app_name)
         .bind(&deployment_id)
         .execute(&db)
         .await;

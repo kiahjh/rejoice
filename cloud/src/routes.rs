@@ -20,6 +20,12 @@ pub mod projects_param_id_deployments_param_deployment_id_index;
 pub mod projects_param_id_deployments_param_deployment_id_logs;
 #[path = "routes/projects/[id]/index.rs"]
 pub mod projects_param_id_index;
+#[path = "routes/projects/[id]/settings/domains/[domain_id]/check.rs"]
+pub mod projects_param_id_settings_domains_param_domain_id_check;
+#[path = "routes/projects/[id]/settings/domains/[domain_id]/delete.rs"]
+pub mod projects_param_id_settings_domains_param_domain_id_delete;
+#[path = "routes/projects/[id]/settings/domains.rs"]
+pub mod projects_param_id_settings_domains;
 #[path = "routes/projects/[id]/settings/env/[env_id]/delete.rs"]
 pub mod projects_param_id_settings_env_param_env_id_delete;
 #[path = "routes/projects/[id]/settings/env.rs"]

@@ -26,6 +26,12 @@ struct Deployment {
     finished_at: Option<String>,
 }
 
+#[derive(FromRow)]
+struct ActiveDomain {
+    hostname: String,
+    status: String,
+}
+
 pub async fn get(state: AppState, req: Req, res: Res, id: String) -> Res {
     let github_id: i64 = match req.cookies.get("session").and_then(|s| s.parse().ok()) {
         Some(id) => id,
@@ -52,6 +58,20 @@ pub async fn get(state: AppState, req: Req, res: Res, id: String) -> Res {
     };
 
     let is_deployed = project.fly_app_name.is_some();
+
+    // Fetch active custom domains
+    let custom_domains = query_as::<_, ActiveDomain>(
+        r#"
+        SELECT hostname, status
+        FROM custom_domains
+        WHERE project_id = ?
+        ORDER BY created_at ASC
+        "#,
+    )
+    .bind(&id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
 
     // Fetch recent deployments
     let deployments = query_as::<_, Deployment>(
@@ -159,19 +179,53 @@ pub async fn get(state: AppState, req: Req, res: Res, id: String) -> Res {
                                 div class="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center" {
                                     (icon::globe(16))
                                 }
-                                h2 class="text-sm font-medium text-[var(--text-primary)]" { "Live URL" }
+                                h2 class="text-sm font-medium text-[var(--text-primary)]" { "URLs" }
                             }
-                            
-                            a 
-                                href=(format!("https://{}.fly.dev", fly_app))
-                                target="_blank"
-                                class="group flex items-center justify-between px-3 py-2.5 -mx-1 rounded-lg bg-[var(--bg-base)] border border-[var(--border-subtle)] hover:border-[var(--border-default)] transition-colors no-underline"
-                            {
-                                span class="text-sm font-mono text-[var(--text-secondary)] group-hover:text-[var(--accent-light)] transition-colors" {
-                                    (format!("{}.fly.dev", fly_app))
+
+                            div class="space-y-2" {
+                                // Custom domains (shown first if any are active)
+                                @for domain in &custom_domains {
+                                    @if domain.status == "ready" {
+                                        a 
+                                            href=(format!("https://{}", domain.hostname))
+                                            target="_blank"
+                                            class="group flex items-center justify-between px-3 py-2.5 -mx-1 rounded-lg bg-[var(--bg-base)] border border-emerald-500/20 hover:border-emerald-500/40 transition-colors no-underline"
+                                        {
+                                            div class="flex items-center gap-2" {
+                                                span class="block w-1.5 h-1.5 rounded-full bg-emerald-500" {}
+                                                span class="text-sm font-mono text-[var(--text-primary)] group-hover:text-[var(--accent-light)] transition-colors" {
+                                                    (&domain.hostname)
+                                                }
+                                            }
+                                            span class="text-[var(--text-faint)] group-hover:text-[var(--text-muted)] transition-colors" {
+                                                (icon::external_link(14))
+                                            }
+                                        }
+                                    } @else {
+                                        div class="flex items-center justify-between px-3 py-2.5 -mx-1 rounded-lg bg-[var(--bg-base)] border border-[var(--border-subtle)]" {
+                                            div class="flex items-center gap-2" {
+                                                span class="block w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" {}
+                                                span class="text-sm font-mono text-[var(--text-muted)]" {
+                                                    (&domain.hostname)
+                                                }
+                                            }
+                                            span class="text-xs text-[var(--text-faint)]" { "Pending" }
+                                        }
+                                    }
                                 }
-                                span class="text-[var(--text-faint)] group-hover:text-[var(--text-muted)] transition-colors" {
-                                    (icon::external_link(14))
+
+                                // Fly.dev URL (always shown)
+                                a 
+                                    href=(format!("https://{}.fly.dev", fly_app))
+                                    target="_blank"
+                                    class="group flex items-center justify-between px-3 py-2.5 -mx-1 rounded-lg bg-[var(--bg-base)] border border-[var(--border-subtle)] hover:border-[var(--border-default)] transition-colors no-underline"
+                                {
+                                    span class="text-sm font-mono text-[var(--text-secondary)] group-hover:text-[var(--accent-light)] transition-colors" {
+                                        (format!("{}.fly.dev", fly_app))
+                                    }
+                                    span class="text-[var(--text-faint)] group-hover:text-[var(--text-muted)] transition-colors" {
+                                        (icon::external_link(14))
+                                    }
                                 }
                             }
                         }))

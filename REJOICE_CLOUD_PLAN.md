@@ -6,7 +6,7 @@
 
 ## Current Implementation Status
 
-**Last Updated:** February 5, 2026
+**Last Updated:** February 8, 2026
 
 ### What's Working
 
@@ -51,14 +51,31 @@ The Rejoice Cloud dashboard is functional with:
    - Full Tailwind-based UI component library
    - Cards, buttons, forms, badges, icons, etc.
 
+8. **Custom Domains**
+   - Add custom domain to a project via Fly.io GraphQL API
+   - Auto-provision SSL certificates (Let's Encrypt via Fly)
+   - DNS configuration instructions (A/AAAA, CNAME, ACME challenge)
+   - Re-check certificate status
+   - Remove custom domains
+   - Custom domains shown in project detail page alongside fly.dev URL
+
 ### What's Not Yet Implemented
 
 - Preview deployments (auto-create on PR)
-- Custom domains
 - Database migrations at deploy time
 - Email notifications
 - Billing/usage tracking
 - Usage display in dashboard
+- Deployment rollbacks (redeploy previous build)
+- `usage_records` table (planned in schema but not yet migrated)
+
+### Codebase Notes
+
+- **23 unit tests** across 6 modules (crypto: 4, builder: 8, deployer: 3, github: 1, fly/certs: 5, domains: 2). All passing.
+- **No test coverage** for routes, components, or integration flows.
+- The `fly.rs` module contains a full Machines REST API client and GraphQL certificates API client. Actual deployments use `flyctl` CLI via `deployer.rs`. The Machines API client may be useful for future features (preview deployment management, machine lifecycle).
+- `Counter.tsx` island is a demo/example — not used in production UI.
+- Webhook handler only processes `push` events; `pull_request` events are acknowledged in comments but not handled yet (needed for preview deployments).
 
 ---
 
@@ -371,10 +388,10 @@ Each app gets a persistent volume mounted at `/data`:
   - [ ] Unique URL per PR
   - [ ] Auto-delete on PR close (cleanup volume too)
 
-- [ ] **Custom Domains**
-  - [ ] Add custom domain to project
-  - [ ] Configure DNS instructions
-  - [ ] Auto-provision SSL via Fly
+- [x] **Custom Domains**
+  - [x] Add custom domain to project
+  - [x] Configure DNS instructions
+  - [x] Auto-provision SSL via Fly
 
 - [ ] **Notifications**
   - [ ] Email on build failure
@@ -515,8 +532,8 @@ Starting immediately, working on Cloud and framework updates in parallel.
 - [ ] Preview URL routing
 - [ ] Auto-cleanup (delete volumes on PR close)
 
-**Phase 5: Polish & Billing (Weeks 11-13)** - NOT STARTED
-- [ ] Custom domains
+**Phase 5: Polish & Billing (Weeks 11-13)** - IN PROGRESS
+- [x] Custom domains
 - [ ] Email notifications
 - [ ] Stripe integration
 - [ ] Usage tracking
@@ -566,7 +583,17 @@ Starting immediately, working on Cloud and framework updates in parallel.
 
 - **Repo selector with search**: Project creation now shows all repos (with pagination) and includes a search filter.
 
+### Added (February 8, 2026)
+
+- **Custom domains support**: Full implementation of custom domain management using Fly.io's GraphQL certificates API. Users can add custom domains from the project settings page, view DNS configuration instructions, check certificate status, and remove domains. Active custom domains are displayed in the project detail page alongside the fly.dev URL. SSL certificates are automatically provisioned via Let's Encrypt through Fly.io.
+
+- **New database table**: `custom_domains` table for tracking domains, certificate status, and DNS validation details.
+
+- **Fly.io GraphQL API client**: Added `graphql()` method and certificate management methods (`add_certificate`, `get_certificate`, `check_certificate`, `list_certificates`, `delete_certificate`) to `fly.rs`.
+
+- **7 new tests**: Certificate deserialization (5 tests), hostname validation (2 tests). Total test count: 23.
+
 ---
 
 *Document created: February 2026*
-*Last updated: February 5, 2026*
+*Last updated: February 8, 2026*

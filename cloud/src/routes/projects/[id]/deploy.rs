@@ -264,6 +264,8 @@ pub async fn post(state: AppState, req: Req, res: Res, id: String) -> Res {
 
 /// Run the deployment in the background and update the database with results.
 async fn run_deployment(config: DeployConfig, db: Pool<Sqlite>, deployment_id: String, github_app: crate::github::GitHubApp) {
+    let fly_app_name = config.fly_app_name.clone();
+
     // Run the deployment with streaming logs
     let result = deployer::deploy(config, Some(db.clone()), Some(deployment_id.clone()), Some(github_app)).await;
 
@@ -283,6 +285,15 @@ async fn run_deployment(config: DeployConfig, db: Pool<Sqlite>, deployment_id: S
         .bind(&result.url)
         .bind(&result.logs)
         .bind(&result.logs.lines().take(1).collect::<String>()) // Use first line as placeholder SHA
+        .bind(&deployment_id)
+        .execute(&db)
+        .await;
+
+        // Ensure fly_app_name is set on the project (safety net)
+        let _ = query(
+            "UPDATE projects SET fly_app_name = ? WHERE id = (SELECT project_id FROM deployments WHERE id = ?) AND (fly_app_name IS NULL OR fly_app_name = '')",
+        )
+        .bind(&fly_app_name)
         .bind(&deployment_id)
         .execute(&db)
         .await;

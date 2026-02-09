@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 const FLY_API_HOSTNAME: &str = "https://api.machines.dev";
+const FLY_GRAPHQL_URL: &str = "https://api.fly.io/graphql";
 
 /// Fly.io API client
 #[derive(Clone)]
@@ -267,6 +268,351 @@ impl FlyClient {
             None::<()>,
         )
         .await?;
+        Ok(())
+    }
+
+    // =========================================================================
+    // IP Addresses API (GraphQL)
+    // =========================================================================
+
+    /// List allocated IP addresses for a Fly app.
+    pub async fn list_ip_addresses(
+        &self,
+        app_name: &str,
+    ) -> Result<Vec<IpAddress>, FlyError> {
+        let query = r#"
+            query($appName: String!) {
+                app(name: $appName) {
+                    ipAddresses {
+                        nodes {
+                            address
+                            type
+                        }
+                    }
+                }
+            }
+        "#;
+
+        let variables = serde_json::json!({
+            "appName": app_name,
+        });
+
+        #[derive(Deserialize)]
+        struct Response {
+            app: AppIpResponse,
+        }
+
+        #[derive(Deserialize)]
+        struct AppIpResponse {
+            #[serde(rename = "ipAddresses")]
+            ip_addresses: IpNodes,
+        }
+
+        #[derive(Deserialize)]
+        struct IpNodes {
+            nodes: Vec<IpAddress>,
+        }
+
+        let response: Response = self.graphql(query, variables).await?;
+        Ok(response.app.ip_addresses.nodes)
+    }
+
+    // =========================================================================
+    // Certificates API (GraphQL)
+    // =========================================================================
+
+    /// Execute a GraphQL query against the Fly.io API.
+    async fn graphql<T: for<'de> Deserialize<'de>>(
+        &self,
+        query: &str,
+        variables: serde_json::Value,
+    ) -> Result<T, FlyError> {
+        let body = serde_json::json!({
+            "query": query,
+            "variables": variables,
+        });
+
+        let response = self
+            .client
+            .post(FLY_GRAPHQL_URL)
+            .header("Authorization", format!("Bearer {}", self.token))
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(FlyError::Request)?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(FlyError::Api {
+                status: status.as_u16(),
+                message: error_text,
+            });
+        }
+
+        let response_body: serde_json::Value =
+            response.json().await.map_err(FlyError::Request)?;
+
+        // Check for GraphQL errors
+        if let Some(errors) = response_body.get("errors") {
+            let message = errors
+                .as_array()
+                .and_then(|arr| arr.first())
+                .and_then(|e| e.get("message"))
+                .and_then(|m| m.as_str())
+                .unwrap_or("Unknown GraphQL error");
+            return Err(FlyError::Api {
+                status: 200,
+                message: message.to_string(),
+            });
+        }
+
+        let data = response_body
+            .get("data")
+            .ok_or_else(|| FlyError::Api {
+                status: 200,
+                message: "No data in GraphQL response".to_string(),
+            })?
+            .clone();
+
+        serde_json::from_value(data).map_err(FlyError::Json)
+    }
+
+    /// Add a certificate (custom domain) to a Fly app.
+    ///
+    /// This initiates the certificate provisioning process. The returned
+    /// `CertificateInfo` contains DNS validation instructions that the user
+    /// must configure with their DNS provider.
+    pub async fn add_certificate(
+        &self,
+        app_name: &str,
+        hostname: &str,
+    ) -> Result<CertificateInfo, FlyError> {
+        let query = r#"
+            mutation($appId: ID!, $hostname: String!) {
+                addCertificate(appId: $appId, hostname: $hostname) {
+                    certificate {
+                        configured
+                        acmeDnsConfigured
+                        acmeAlpnConfigured
+                        isAcmeHttpConfigured
+                        certificateAuthority
+                        dnsProvider
+                        dnsValidationInstructions
+                        dnsValidationHostname
+                        dnsValidationTarget
+                        hostname
+                        id
+                        source
+                        clientStatus
+                    }
+                }
+            }
+        "#;
+
+        let variables = serde_json::json!({
+            "appId": app_name,
+            "hostname": hostname,
+        });
+
+        #[derive(Deserialize)]
+        struct Response {
+            #[serde(rename = "addCertificate")]
+            add_certificate: AddCertificateResponse,
+        }
+
+        #[derive(Deserialize)]
+        struct AddCertificateResponse {
+            certificate: CertificateInfo,
+        }
+
+        let response: Response = self.graphql(query, variables).await?;
+        Ok(response.add_certificate.certificate)
+    }
+
+    /// Get certificate details for a hostname on a Fly app.
+    pub async fn get_certificate(
+        &self,
+        app_name: &str,
+        hostname: &str,
+    ) -> Result<CertificateDetail, FlyError> {
+        let query = r#"
+            query($appName: String!, $hostname: String!) {
+                app(name: $appName) {
+                    certificate(hostname: $hostname) {
+                        configured
+                        acmeDnsConfigured
+                        acmeAlpnConfigured
+                        isAcmeHttpConfigured
+                        certificateAuthority
+                        createdAt
+                        dnsProvider
+                        dnsValidationInstructions
+                        dnsValidationHostname
+                        dnsValidationTarget
+                        hostname
+                        id
+                        source
+                        clientStatus
+                        issued {
+                            nodes {
+                                type
+                                expiresAt
+                            }
+                        }
+                    }
+                }
+            }
+        "#;
+
+        let variables = serde_json::json!({
+            "appName": app_name,
+            "hostname": hostname,
+        });
+
+        #[derive(Deserialize)]
+        struct Response {
+            app: AppCertResponse,
+        }
+
+        #[derive(Deserialize)]
+        struct AppCertResponse {
+            certificate: CertificateDetail,
+        }
+
+        let response: Response = self.graphql(query, variables).await?;
+        Ok(response.app.certificate)
+    }
+
+    /// Check a certificate's status (triggers re-validation).
+    ///
+    /// Similar to `get_certificate` but also requests the `check` field,
+    /// which triggers Fly to re-validate the certificate.
+    pub async fn check_certificate(
+        &self,
+        app_name: &str,
+        hostname: &str,
+    ) -> Result<CertificateDetail, FlyError> {
+        let query = r#"
+            query($appName: String!, $hostname: String!) {
+                app(name: $appName) {
+                    certificate(hostname: $hostname) {
+                        check
+                        configured
+                        acmeDnsConfigured
+                        acmeAlpnConfigured
+                        isAcmeHttpConfigured
+                        certificateAuthority
+                        createdAt
+                        dnsProvider
+                        dnsValidationInstructions
+                        dnsValidationHostname
+                        dnsValidationTarget
+                        hostname
+                        id
+                        source
+                        clientStatus
+                        issued {
+                            nodes {
+                                type
+                                expiresAt
+                            }
+                        }
+                    }
+                }
+            }
+        "#;
+
+        let variables = serde_json::json!({
+            "appName": app_name,
+            "hostname": hostname,
+        });
+
+        #[derive(Deserialize)]
+        struct Response {
+            app: AppCertResponse,
+        }
+
+        #[derive(Deserialize)]
+        struct AppCertResponse {
+            certificate: CertificateDetail,
+        }
+
+        let response: Response = self.graphql(query, variables).await?;
+        Ok(response.app.certificate)
+    }
+
+    /// List all certificates for a Fly app.
+    pub async fn list_certificates(
+        &self,
+        app_name: &str,
+    ) -> Result<Vec<CertificateSummary>, FlyError> {
+        let query = r#"
+            query($appName: String!) {
+                app(name: $appName) {
+                    certificates {
+                        nodes {
+                            createdAt
+                            hostname
+                            clientStatus
+                            id
+                        }
+                    }
+                }
+            }
+        "#;
+
+        let variables = serde_json::json!({
+            "appName": app_name,
+        });
+
+        #[derive(Deserialize)]
+        struct Response {
+            app: AppCertsResponse,
+        }
+
+        #[derive(Deserialize)]
+        struct AppCertsResponse {
+            certificates: CertsNodes,
+        }
+
+        #[derive(Deserialize)]
+        struct CertsNodes {
+            nodes: Vec<CertificateSummary>,
+        }
+
+        let response: Response = self.graphql(query, variables).await?;
+        Ok(response.app.certificates.nodes)
+    }
+
+    /// Delete a certificate (custom domain) from a Fly app.
+    pub async fn delete_certificate(
+        &self,
+        app_name: &str,
+        hostname: &str,
+    ) -> Result<(), FlyError> {
+        let query = r#"
+            mutation($appId: ID!, $hostname: String!) {
+                deleteCertificate(appId: $appId, hostname: $hostname) {
+                    app {
+                        name
+                    }
+                    certificate {
+                        hostname
+                        id
+                    }
+                }
+            }
+        "#;
+
+        let variables = serde_json::json!({
+            "appId": app_name,
+            "hostname": hostname,
+        });
+
+        // We don't need the response data, just need it to succeed
+        let _: serde_json::Value = self.graphql(query, variables).await?;
         Ok(())
     }
 }
@@ -536,6 +882,122 @@ pub struct Volume {
 }
 
 // =============================================================================
+// IP Address Types (GraphQL API)
+// =============================================================================
+
+/// An allocated IP address for a Fly app.
+#[derive(Debug, Clone, Deserialize)]
+pub struct IpAddress {
+    pub address: String,
+    #[serde(rename = "type")]
+    pub ip_type: String, // "v4" or "v6"
+}
+
+// =============================================================================
+// Certificate Types (GraphQL API)
+// =============================================================================
+
+/// Certificate info returned when adding a new certificate.
+#[derive(Debug, Clone, Deserialize)]
+pub struct CertificateInfo {
+    pub configured: bool,
+    #[serde(rename = "acmeDnsConfigured")]
+    pub acme_dns_configured: bool,
+    #[serde(rename = "acmeAlpnConfigured")]
+    pub acme_alpn_configured: bool,
+    #[serde(rename = "isAcmeHttpConfigured")]
+    pub is_acme_http_configured: bool,
+    #[serde(rename = "certificateAuthority")]
+    pub certificate_authority: Option<String>,
+    #[serde(rename = "dnsProvider")]
+    pub dns_provider: Option<String>,
+    #[serde(rename = "dnsValidationInstructions")]
+    pub dns_validation_instructions: Option<String>,
+    #[serde(rename = "dnsValidationHostname")]
+    pub dns_validation_hostname: Option<String>,
+    #[serde(rename = "dnsValidationTarget")]
+    pub dns_validation_target: Option<String>,
+    pub hostname: String,
+    pub id: String,
+    pub source: Option<String>,
+    #[serde(rename = "clientStatus")]
+    pub client_status: Option<String>,
+}
+
+/// Detailed certificate info including issued certificates.
+#[derive(Debug, Clone, Deserialize)]
+pub struct CertificateDetail {
+    pub configured: bool,
+    #[serde(rename = "acmeDnsConfigured")]
+    pub acme_dns_configured: bool,
+    #[serde(rename = "acmeAlpnConfigured")]
+    pub acme_alpn_configured: bool,
+    #[serde(rename = "isAcmeHttpConfigured")]
+    pub is_acme_http_configured: bool,
+    #[serde(rename = "certificateAuthority")]
+    pub certificate_authority: Option<String>,
+    #[serde(rename = "createdAt")]
+    pub created_at: Option<String>,
+    #[serde(rename = "dnsProvider")]
+    pub dns_provider: Option<String>,
+    #[serde(rename = "dnsValidationInstructions")]
+    pub dns_validation_instructions: Option<String>,
+    #[serde(rename = "dnsValidationHostname")]
+    pub dns_validation_hostname: Option<String>,
+    #[serde(rename = "dnsValidationTarget")]
+    pub dns_validation_target: Option<String>,
+    pub hostname: String,
+    pub id: String,
+    pub source: Option<String>,
+    #[serde(rename = "clientStatus")]
+    pub client_status: Option<String>,
+    pub issued: Option<IssuedCertificates>,
+}
+
+/// Container for issued certificate nodes.
+#[derive(Debug, Clone, Deserialize)]
+pub struct IssuedCertificates {
+    pub nodes: Vec<IssuedCertificate>,
+}
+
+/// An individual issued certificate (RSA or ECDSA).
+#[derive(Debug, Clone, Deserialize)]
+pub struct IssuedCertificate {
+    #[serde(rename = "type")]
+    pub cert_type: String,
+    #[serde(rename = "expiresAt")]
+    pub expires_at: Option<String>,
+}
+
+/// Summary certificate info from listing.
+#[derive(Debug, Clone, Deserialize)]
+pub struct CertificateSummary {
+    #[serde(rename = "createdAt")]
+    pub created_at: Option<String>,
+    pub hostname: String,
+    #[serde(rename = "clientStatus")]
+    pub client_status: Option<String>,
+    pub id: String,
+}
+
+impl CertificateDetail {
+    /// Whether the certificate has been fully issued and is ready.
+    pub fn is_ready(&self) -> bool {
+        self.client_status.as_deref() == Some("Ready")
+    }
+
+    /// Get a user-friendly status string.
+    pub fn status_display(&self) -> &str {
+        match self.client_status.as_deref() {
+            Some("Ready") => "ready",
+            Some("Awaiting configuration") => "pending",
+            Some(s) if s.contains("error") || s.contains("Error") => "error",
+            _ => "validating",
+        }
+    }
+}
+
+// =============================================================================
 // Errors
 // =============================================================================
 
@@ -559,3 +1021,162 @@ impl std::fmt::Display for FlyError {
 }
 
 impl std::error::Error for FlyError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_certificate_info_deserialization() {
+        let json = r#"{
+            "configured": true,
+            "acmeDnsConfigured": false,
+            "acmeAlpnConfigured": true,
+            "isAcmeHttpConfigured": false,
+            "certificateAuthority": "lets_encrypt",
+            "dnsProvider": "cloudflare",
+            "dnsValidationInstructions": "CNAME _acme-challenge.example.com => example.com.xxx.flydns.net.",
+            "dnsValidationHostname": "_acme-challenge.example.com",
+            "dnsValidationTarget": "example.com.xxx.flydns.net",
+            "hostname": "example.com",
+            "id": "cert_abc123",
+            "source": "fly",
+            "clientStatus": "Ready"
+        }"#;
+
+        let cert: CertificateInfo = serde_json::from_str(json).unwrap();
+        assert_eq!(cert.hostname, "example.com");
+        assert_eq!(cert.id, "cert_abc123");
+        assert!(cert.configured);
+        assert!(!cert.acme_dns_configured);
+        assert_eq!(cert.client_status.as_deref(), Some("Ready"));
+        assert_eq!(
+            cert.dns_validation_hostname.as_deref(),
+            Some("_acme-challenge.example.com")
+        );
+        assert_eq!(
+            cert.dns_validation_target.as_deref(),
+            Some("example.com.xxx.flydns.net")
+        );
+    }
+
+    #[test]
+    fn test_certificate_detail_deserialization_with_issued() {
+        let json = r#"{
+            "configured": true,
+            "acmeDnsConfigured": true,
+            "acmeAlpnConfigured": true,
+            "isAcmeHttpConfigured": true,
+            "certificateAuthority": "lets_encrypt",
+            "createdAt": "2026-02-08T12:00:00Z",
+            "dnsProvider": "cloudflare",
+            "dnsValidationInstructions": null,
+            "dnsValidationHostname": "_acme-challenge.example.com",
+            "dnsValidationTarget": "example.com.xxx.flydns.net",
+            "hostname": "example.com",
+            "id": "cert_abc123",
+            "source": "fly",
+            "clientStatus": "Ready",
+            "issued": {
+                "nodes": [
+                    {"type": "ecdsa", "expiresAt": "2026-05-08T12:00:00Z"},
+                    {"type": "rsa", "expiresAt": "2026-05-08T12:00:00Z"}
+                ]
+            }
+        }"#;
+
+        let cert: CertificateDetail = serde_json::from_str(json).unwrap();
+        assert_eq!(cert.hostname, "example.com");
+        assert!(cert.is_ready());
+        assert_eq!(cert.status_display(), "ready");
+
+        let issued = cert.issued.unwrap();
+        assert_eq!(issued.nodes.len(), 2);
+        assert_eq!(issued.nodes[0].cert_type, "ecdsa");
+        assert_eq!(issued.nodes[1].cert_type, "rsa");
+    }
+
+    #[test]
+    fn test_certificate_detail_status_display() {
+        let make_cert = |status: Option<&str>| CertificateDetail {
+            configured: false,
+            acme_dns_configured: false,
+            acme_alpn_configured: false,
+            is_acme_http_configured: false,
+            certificate_authority: None,
+            created_at: None,
+            dns_provider: None,
+            dns_validation_instructions: None,
+            dns_validation_hostname: None,
+            dns_validation_target: None,
+            hostname: "example.com".to_string(),
+            id: "test".to_string(),
+            source: None,
+            client_status: status.map(String::from),
+            issued: None,
+        };
+
+        assert_eq!(make_cert(Some("Ready")).status_display(), "ready");
+        assert!(make_cert(Some("Ready")).is_ready());
+
+        assert_eq!(
+            make_cert(Some("Awaiting configuration")).status_display(),
+            "pending"
+        );
+        assert!(!make_cert(Some("Awaiting configuration")).is_ready());
+
+        assert_eq!(
+            make_cert(Some("Validation error")).status_display(),
+            "error"
+        );
+
+        assert_eq!(
+            make_cert(Some("Verifying DNS")).status_display(),
+            "validating"
+        );
+
+        assert_eq!(make_cert(None).status_display(), "validating");
+        assert!(!make_cert(None).is_ready());
+    }
+
+    #[test]
+    fn test_certificate_summary_deserialization() {
+        let json = r#"[
+            {"createdAt": "2026-02-08T12:00:00Z", "hostname": "example.com", "clientStatus": "Ready", "id": "cert1"},
+            {"createdAt": "2026-02-08T13:00:00Z", "hostname": "www.example.com", "clientStatus": "Awaiting configuration", "id": "cert2"}
+        ]"#;
+
+        let certs: Vec<CertificateSummary> = serde_json::from_str(json).unwrap();
+        assert_eq!(certs.len(), 2);
+        assert_eq!(certs[0].hostname, "example.com");
+        assert_eq!(certs[0].client_status.as_deref(), Some("Ready"));
+        assert_eq!(certs[1].hostname, "www.example.com");
+    }
+
+    #[test]
+    fn test_certificate_detail_without_issued() {
+        let json = r#"{
+            "configured": false,
+            "acmeDnsConfigured": false,
+            "acmeAlpnConfigured": false,
+            "isAcmeHttpConfigured": false,
+            "certificateAuthority": null,
+            "createdAt": "2026-02-08T12:00:00Z",
+            "dnsProvider": null,
+            "dnsValidationInstructions": null,
+            "dnsValidationHostname": null,
+            "dnsValidationTarget": null,
+            "hostname": "example.com",
+            "id": "cert_new",
+            "source": "fly",
+            "clientStatus": "Awaiting configuration",
+            "issued": {"nodes": []}
+        }"#;
+
+        let cert: CertificateDetail = serde_json::from_str(json).unwrap();
+        assert!(!cert.is_ready());
+        assert_eq!(cert.status_display(), "pending");
+        assert!(!cert.configured);
+        assert!(cert.issued.unwrap().nodes.is_empty());
+    }
+}
