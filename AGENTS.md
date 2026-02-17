@@ -1,58 +1,163 @@
 # Rejoice - Agent Guide
 
-This document provides technical context for AI coding agents working on the Rejoice framework.
+This document provides strict instructions and technical context for AI coding agents working on the Rejoice framework.
+
+---
+
+## Core Principles (MANDATORY)
+
+These principles are non-negotiable. Every agent must follow them at all times.
+
+### 1. Excellence Over Convenience
+
+Always do things the **best and most correct way**, not just the easiest or quickest way. This means:
+- Choose robust, maintainable solutions over quick hacks
+- Follow established patterns and idioms for Rust and the web ecosystem
+- Consider edge cases, error handling, and future maintainability
+- If you're unsure whether an approach is correct, research it before implementing
+
+### 2. Comprehensive Testing
+
+Everything that can be tested **must** have thorough tests:
+- Write tests for all new functionality
+- Cover edge cases, error conditions, and boundary values
+- Tests must pass before considering work complete
+- If you find untested code, add tests for it
+- Run `cargo test` frequently to ensure nothing is broken
+
+### 3. Codebase Excellence
+
+The codebase must remain in **impeccable condition**:
+- Be proactive: if you encounter poorly written, outdated, or incorrect code, fix it—even if it's not what you're currently working on
+- Never assume existing code is correct just because it exists; verify and improve
+- Maintain consistent style, naming conventions, and patterns throughout
+- Remove dead code, clean up TODOs, and address technical debt as you find it
+- Leave every file better than you found it
+
+### 4. Dogfooding Awareness
+
+When working on **Rejoice Cloud** (the `cloud/` directory), you are using Rejoice to build a real application. This is a critical dogfooding opportunity:
+- Document any framework friction, bugs, or missing features in `DOGFOODING_NOTES.md`
+- Even small annoyances matter—write them down
+- Suggest or implement framework improvements based on real usage
+
+---
+
+## Rejoice Cloud UI Guidelines (MANDATORY)
+
+When working on the Rejoice Cloud UI (`cloud/` directory), follow these rules strictly:
+
+### 1. Use the Component System
+
+All UI must be built using the component system in `cloud/src/components/`. **Never** write raw HTML with inline styles.
+
+```rust
+// GOOD - Use components
+use crate::components::{self as ui, ButtonVariant, ButtonSize};
+
+ui::button_link("/projects", "View Projects", ButtonVariant::Primary, ButtonSize::Medium)
+ui::card(html! { ... })
+ui::page_header("Title", Some("Subtitle"), Some(actions))
+
+// BAD - Raw HTML with inline styles
+html! { a href="/projects" style="background: blue; padding: 10px;" { "View Projects" } }
+```
+
+### 2. Use Tailwind CSS Exclusively
+
+- **Never** use inline `style` attributes
+- **Never** write custom CSS unless absolutely necessary (only for things Tailwind cannot do)
+- All styling must use Tailwind utility classes
+- The CSS file should only contain: Tailwind imports, font imports, and minimal base styles
+
+### 3. Component Structure
+
+Components live in `cloud/src/components/`:
+- `button.rs` - Buttons, links styled as buttons, nav links
+- `card.rs` - Cards, badges, project cards
+- `form.rs` - Inputs, labels, form groups
+- `icon.rs` - SVG icons as functions
+- `layout.rs` - Page structure, grids, empty states
+- `typography.rs` - Text styles
+
+### 4. When to Create New Components
+
+Create a new component when:
+- A UI pattern is used more than once
+- The element has variants (sizes, colors, states)
+- The markup is complex enough to warrant abstraction
+
+### 5. Component Design Patterns
+
+```rust
+// Use enums for variants
+pub enum ButtonVariant { Primary, Secondary, Ghost, Danger }
+pub enum ButtonSize { Small, Medium, Large }
+
+// Components return Markup
+pub fn button(label: &str, variant: ButtonVariant, size: ButtonSize) -> Markup
+
+// Components that accept children
+pub fn card(children: Markup) -> Markup
+
+// Components compose other components
+pub fn project_card(...) -> Markup {
+    html! {
+        (card(html! {
+            // Uses card internally
+        }))
+    }
+}
+```
+
+---
 
 ## Project Structure
 
 ```
-src/
-├── bin/
-│   ├── main.rs              # CLI entry point (uses clap)
-│   └── commands/
-│       ├── mod.rs           # Command exports
-│       ├── init.rs          # `rejoice init` - project scaffolding
-│       ├── dev.rs           # `rejoice dev` - dev server with HMR
-│       ├── build.rs         # `rejoice build` - production builds
-│       ├── migrate.rs       # `rejoice migrate` - database migrations
-│       ├── boilerplate.rs   # Auto-generates route/layout boilerplate
-│       ├── islands.rs       # Generates client/islands.tsx registry
-│       └── style.rs         # Terminal output helpers
-├── assets/
-│   └── live_reload.js       # Client-side HMR script (injected into HTML)
-├── app.rs                   # App struct, middleware, server setup
-├── codegen.rs               # Build-time route generation
-├── db.rs                    # SQLite pool config and exports
-├── env.rs                   # Re-exports dotenvy_macro::dotenv as env!
-├── island.rs                # Island macro for SolidJS components
-├── request.rs               # Req type for incoming request data
-├── response.rs              # Res type for building responses
-└── lib.rs                   # Public API exports
+rejoice/                     # Main framework crate
+├── src/
+│   ├── bin/
+│   │   ├── main.rs          # CLI entry point (clap)
+│   │   └── commands/
+│   │       ├── mod.rs       # Command exports
+│   │       ├── init.rs      # `rejoice init` - project scaffolding
+│   │       ├── dev.rs       # `rejoice dev` - dev server with HMR
+│   │       ├── build.rs     # `rejoice build` - production builds
+│   │       ├── migrate.rs   # `rejoice migrate` - database migrations
+│   │       ├── boilerplate.rs
+│   │       ├── islands.rs   # Generates client/islands.tsx registry
+│   │       └── style.rs     # Terminal output helpers
+│   ├── assets/
+│   │   └── live_reload.js   # Client-side HMR script
+│   ├── app.rs               # App struct, middleware, server setup
+│   ├── codegen.rs           # Build-time route generation
+│   ├── db.rs                # SQLite pool config (feature-gated)
+│   ├── env.rs               # Re-exports dotenvy_macro::dotenv as env!
+│   ├── island.rs            # Island macro for SolidJS components
+│   ├── request.rs           # Req type
+│   ├── response.rs          # Res type
+│   └── lib.rs               # Public API exports
+cloud/                       # Rejoice Cloud - deployment platform (dogfooding!)
+docs/                        # Documentation website
 ```
+
+---
 
 ## CLI Commands
 
-The CLI uses **clap** with derive macros. Defined in `src/bin/main.rs`.
+The CLI uses **clap** with derive macros. Defined in `rejoice/src/bin/main.rs`.
 
 ### `rejoice init [name] [--with-db]`
 
-Creates a new project. Implementation in `src/bin/commands/init.rs`.
+Creates a new project. Implementation: `commands/init.rs`.
 
-**Without `--with-db`:**
-- Basic project with `App::new()` and `routes!()`
-- Routes receive `req: Req, res: Res`
-- No database files
-
-**With `--with-db`:**
-- Creates `.env` with `DATABASE_URL` and empty `.db` file
-- Generates `AppState` struct with db pool in `main.rs`
-- Uses `App::with_state()` and `routes!(AppState)`
-- Routes receive `state: AppState, req: Req, res: Res`
-
-**IMPORTANT:** When changing the framework's public API, imports, or patterns, update the generated templates in `init.rs` to match.
+- **Without `--with-db`:** Basic project with `App::new()` and `routes!()`
+- **With `--with-db`:** Adds `.env`, database file, `AppState` with pool, uses `App::with_state()` and `routes!(AppState)`
 
 ### `rejoice dev`
 
-Starts the dev server with:
+Development server with:
 - Cargo watch for Rust recompilation
 - Vite watch for client assets (via Bun)
 - WebSocket-based live reload
@@ -60,36 +165,25 @@ Starts the dev server with:
 
 ### `rejoice build [--release]`
 
-Builds the project for deployment. Implementation in `src/bin/commands/build.rs`.
-
-**Steps performed:**
-1. Install dependencies with Bun (if `node_modules/` missing and `client/` exists)
+Production build:
+1. Install JS dependencies with Bun (if needed)
 2. Generate islands registry (if `client/` exists)
-3. Build client assets with Vite (if `client/` exists)
+3. Build client assets with Vite
 4. Build Rust binary with Cargo
-
-**Flags:**
-- `--release` - Build with optimizations, prints deployment instructions
-
-**Output locations:**
-- Binary: `target/debug/<name>` or `target/release/<name>`
-- Client assets: `dist/islands.js`, `dist/styles.css`
 
 ### `rejoice migrate <action>`
 
-Database migrations via sqlx-cli. Implementation in `src/bin/commands/migrate.rs`.
+Database migrations via sqlx-cli:
+- `add <name>` - Create new migration
+- `up` - Apply pending migrations
+- `revert` - Revert last migration
+- `status` - Show migration status
 
-**Subcommands:**
-- `rejoice migrate add <name>` - Create a new reversible migration (up.sql + down.sql)
-- `rejoice migrate up` - Apply pending migrations
-- `rejoice migrate revert` - Revert the last migration
-- `rejoice migrate status` - Show migration status
-
-If sqlx-cli is not installed, the command will offer to install it automatically.
+---
 
 ## Code Generation
 
-The `codegen.rs` module runs at **build time** via the user's `build.rs`:
+`codegen.rs` runs at build time via the user's `build.rs`:
 
 ```rust
 fn main() {
@@ -97,304 +191,136 @@ fn main() {
 }
 ```
 
-### What it generates
-
-1. **`src/routes.rs`** - Module declarations for rust-analyzer support
-2. **`$OUT_DIR/routes_generated.rs`** - Actual router code, included via `routes!()` macro
-
-### Route discovery
+### Route Discovery
 
 Scans `src/routes/` recursively:
 - `index.rs` → `/` or `/parent`
 - `about.rs` → `/about`
 - `[id].rs` → `/:id` (dynamic segment)
-- `[id]/` → Directory with dynamic segment (e.g., `users/[id]/posts/` → `/users/:id/posts`)
 - `layout.rs` → Wrapper for sibling/child routes
 
-Dynamic segments can appear anywhere in the path, including directories. Multiple dynamic segments are supported (e.g., `/users/:user_id/posts/:post_id`).
+### HTTP Methods
 
-### HTTP Method Detection
+Route files export functions named after HTTP methods: `get`, `post`, `put`, `delete`, `patch`.
 
-Route files export functions named after HTTP methods:
-- `get` → GET request handler
-- `post` → POST request handler
-- `put` → PUT request handler
-- `delete` → DELETE request handler
-- `patch` → PATCH request handler
+### Generated Code
 
-A single route file can export multiple handlers for different methods.
+- `src/routes.rs` - Module declarations for rust-analyzer
+- `$OUT_DIR/routes_generated.rs` - Router code, included via `routes!()` macro
 
-### Generated wrapper functions
-
-For routes with layouts, generates wrapper functions that:
-1. Extract state via Axum's `State` extractor (internally)
-2. Extract `Res` from request parts and `Req` from the full request (including body)
-3. Call the handler function with `(state, req, res)` or `(req, res)`
-4. If the response is HTML, wrap with layouts (innermost to outermost)
-5. If the response is not HTML (redirect, JSON, etc.), return it directly without layout wrapping
-
-Note: `Req` is extracted last because it consumes the request body.
-
-The `__RejoiceState` type alias is defined by the `routes!()` macro:
-- `routes!()` → `type __RejoiceState = ();`
-- `routes!(AppState)` → `type __RejoiceState = AppState;`
-
-### Router generation
-
-```rust
-pub fn create_router() -> axum::Router<__RejoiceState> {
-    axum::Router::new()
-        .route("/", axum::routing::get(wrapper_index))
-        // ... more routes
-}
-```
+---
 
 ## Request and Response Types
 
 ### `Req` - Incoming Request
 
-The `Req` type provides access to request data including body:
-
 ```rust
 pub struct Req {
-    pub headers: HeaderMap,   // HTTP headers
-    pub cookies: Cookies,     // Parsed cookies
-    pub method: Method,       // GET, POST, etc.
-    pub uri: Uri,             // Request URI
-    pub body: Body,           // Request body (for POST, PUT, etc.)
+    pub headers: HeaderMap,
+    pub cookies: Cookies,
+    pub method: Method,
+    pub uri: Uri,
+    pub body: Body,
 }
 
-// Reading request data
+// Usage
 let auth = req.headers.get("Authorization");
 let session = req.cookies.get("session_id");
-
-// Parsing POST body
 let form = req.body.as_form::<MyForm>()?;
 let json = req.body.as_json::<MyData>()?;
 ```
 
 ### `Res` - Response Builder
 
-The `Res` type uses interior mutability for building responses.
+Uses interior mutability for chaining.
 
-**Mutators** (return `&Res` for chaining):
-- `set_cookie(name, value)` - Set a cookie
-- `set_cookie_with_options(...)` - Set cookie with path, max_age, etc.
-- `delete_cookie(name)` - Delete a cookie
-- `set_header(name, value)` - Set a response header
-- `set_status(StatusCode)` - Override status code
+**Mutators** (return `&Res`):
+- `set_cookie(name, value)`
+- `set_cookie_with_options(...)`
+- `delete_cookie(name)`
+- `set_header(name, value)`
+- `set_status(StatusCode)`
 
-**Finalizers** (take `&self`, return owned `Res` - chainable from mutators):
-- `html(Markup)` - HTML response (200, text/html)
-- `json(&impl Serialize)` - JSON response (200, application/json)
+**Finalizers** (return owned `Res`):
+- `html(Markup)` - HTML response
+- `json(&impl Serialize)` - JSON response
 - `redirect(url)` - 302 redirect
 - `redirect_permanent(url)` - 301 redirect
 - `raw(impl Into<Vec<u8>>)` - Raw bytes
 
-**Example usage:**
-
-```rust
-pub async fn get(state: AppState, req: Req, res: Res) -> Res {
-    // Read cookies
-    let session = req.cookies.get("session");
-    
-    if session.is_none() {
-        // Redirect (bypasses layout wrapping)
-        return res.redirect("/login");
-    }
-    
-    // Set cookies and return HTML
-    res.set_cookie("last_visit", "2025-01-01")
-       .set_header("X-Custom", "value")
-       .html(html! {
-           h1 { "Dashboard" }
-       })
-}
-
-// API endpoint returning JSON
-pub async fn get(state: AppState, req: Req, res: Res) -> Res {
-    let users = get_users(&state.db).await;
-    res.json(&users)
-}
-```
-
 **Error helpers:**
+- `bad_request(msg)` - 400
+- `unauthorized(msg)` - 401
+- `forbidden(msg)` - 403
+- `not_found(msg)` - 404
+- `internal_error(msg)` - 500
 
-```rust
-res.bad_request("Invalid input")    // 400
-res.unauthorized("Please log in")   // 401
-res.forbidden("Access denied")      // 403
-res.not_found("Page not found")     // 404
-res.internal_error("Server error")  // 500
-```
-```
+---
 
-## App and State
-
-### Stateless apps
-
-```rust
-let app = App::new(8080, create_router());
-```
-
-### Stateful apps
-
-```rust
-let app = App::with_state(8080, create_router(), state);
-```
-
-`App::with_state()` is generic over any `S: Clone + Send + Sync + 'static`. The state is attached to the router via Axum's `.with_state()` before serving.
-
-### Route signatures
-
-Routes and layouts receive state as a plain value (not wrapped in `State`):
+## Route Signatures
 
 ```rust
 // Stateless
 pub async fn get(req: Req, res: Res) -> Res { ... }
-pub async fn post(req: Req, res: Res) -> Res { ... }
 pub async fn layout(req: Req, res: Res, children: Children) -> Res { ... }
 
-// Stateful  
+// Stateful
 pub async fn get(state: AppState, req: Req, res: Res) -> Res { ... }
-pub async fn post(state: AppState, req: Req, res: Res) -> Res { ... }
 pub async fn layout(state: AppState, req: Req, res: Res, children: Children) -> Res { ... }
 ```
 
-Note: The codegen handles Axum's `State` extraction internally; user code receives the unwrapped state value.
+---
 
 ## Database Support
 
-**Feature-gated:** The database module requires the `sqlite` feature flag.
+Feature-gated with `sqlite`:
 
 ```toml
-# In user's Cargo.toml
 rejoice = { version = "...", features = ["sqlite"] }
 ```
 
-Exports in `src/db.rs` (only available with `sqlite` feature):
-- `Pool`, `Sqlite` - sqlx types
-- `query`, `query_as`, `query_scalar` - sqlx query functions/macros
-- `FromRow` - Derive macro for mapping query results to structs
-- `PoolConfig`, `create_pool` - Pool creation helpers
+Exports: `Pool`, `Sqlite`, `query`, `query_as`, `query_scalar`, `FromRow`, `PoolConfig`, `create_pool`
 
-Users access via `rejoice::db::*`.
-
-When `rejoice init --with-db` is used, the generated `Cargo.toml` automatically includes the `sqlite` feature.
+---
 
 ## Islands (SolidJS Components)
 
-### How islands work
+1. Create TSX component in `client/ComponentName.tsx`
+2. Use `island!(ComponentName, { props })` macro in Rust
+3. Framework generates `<div data-island="ComponentName" data-props='...'>`
+4. Client-side JS hydrates with SolidJS
 
-1. User creates TSX component in `client/ComponentName.tsx`
-2. User uses `island!(ComponentName, { props })` macro in Rust
-3. The macro generates a `<div data-island="ComponentName" data-props='{"props": ...}'>`
-4. Vite builds `client/islands.tsx` (auto-generated) which registers all components
-5. Client-side JS finds `[data-island]` elements and hydrates them with SolidJS
-
-### The island macro
-
-Defined in `src/island.rs`. Generates:
-- Wrapper div with `data-island` attribute (component name)
-- `data-props` attribute with JSON-serialized props (HTML-escaped)
-
-### Islands registry generation
-
-`src/bin/commands/islands.rs` contains `generate_islands_registry()` which:
-1. Scans `client/` for `.tsx` and `.jsx` files (excluding `islands.tsx` itself)
-2. Generates `client/islands.tsx` with imports and a registry object
-3. Includes hydration code that queries `[data-island]` elements and renders SolidJS components
-4. Exposes `window.__hydrateIslands()` for re-hydration after HMR
-
-This runs automatically during `rejoice dev` on startup and when client files change.
-
-## Hot Module Replacement
-
-### How HMR works
-
-1. `dev.rs` starts a WebSocket server on port 3001 at `/__reload`
-2. `assets/live_reload.js` is injected into HTML responses (via middleware in `app.rs`)
-3. File watchers detect changes to Rust or client files
-4. On change: rebuild triggered, WebSocket sends reload message
-5. Client receives message and reloads
-
-### Reload types
-
-- `"full"` - Client JS changed; triggers full `location.reload()`
-- `"reload"` - Rust changed; fetches new HTML, swaps `document.body`, re-hydrates islands via `window.__hydrateIslands()`
-
-### Script injection
-
-`ScriptInjectionMiddleware` in `app.rs`:
-- Checks if response is HTML
-- Injects `<script>` before `</body>` for islands and live reload
-- Injects `<link>` in `</head>` for styles
-
-## Static Assets (public/)
-
-The `public/` directory serves static files at the root URL path:
-- `public/logo.png` → `/logo.png`
-- `public/images/hero.jpg` → `/images/hero.jpg`
-- `public/favicon.ico` → `/favicon.ico`
-
-Implemented in `app.rs` using `fallback_service(ServeDir::new("public"))`, so defined routes take precedence over static files.
-
-The `public/` directory is watched during `rejoice dev` and triggers a reload when files change.
-
-## Tailwind CSS
-
-Configured in the generated `vite.config.ts` with `@tailwindcss/vite` plugin.
-
-`client/styles.css` contains:
-```css
-@import "tailwindcss";
-@source "../src/**/*.rs";
-@source "./**/*.tsx";
-```
-
-This tells Tailwind to scan Rust and TSX files for class names.
-
-## Public Exports
-
-From `src/lib.rs`:
-
-**Root level:**
-- `App` - Server struct
-- `Req` - Incoming request data (headers, cookies, method, uri)
-- `Res` - Response builder with `set_*` mutators and finalizers
-- `Children` - Type alias for layout children (`Markup`)
-- `Path` - Axum path extractor for dynamic routes
-- `html!`, `Markup`, `DOCTYPE`, `PreEscaped` - Maud re-exports (flattened)
-- `json` - serde_json::json macro
-- `island!`, `island_fn` - Island support
-- `routes!` - Include generated routes
-
-**Prelude module:**
-```rust
-use rejoice::prelude::*;
-// Brings in: App, Req, Res, Children, Path, html, Markup, DOCTYPE, PreEscaped, json, island
-```
-
-**Feature-gated:**
-- `db::*` - SQLite support (requires `sqlite` feature)
-
-**Internal (doc-hidden):**
-- `State`, `Router`, `routing` - Used by generated code
+---
 
 ## Dependencies
 
-**IMPORTANT:** All dependencies in `Cargo.toml` must use exact versions (e.g., `"1.0.148"` not `"1"`). When adding or updating dependencies, always pin to a specific patch version.
+**IMPORTANT:** All dependencies must use exact versions (e.g., `"1.0.148"` not `"1"`). Always pin to specific patch versions.
+
+---
 
 ## Maintenance Checklist
 
 When modifying the framework:
 
 1. **Changing public API or imports** → Update `init.rs` templates
-2. **Changing route/layout signatures** → Update `codegen.rs` wrapper generation AND `init.rs`
+2. **Changing route/layout signatures** → Update `codegen.rs` AND `init.rs`
 3. **Adding new exports** → Update `lib.rs` and this document
 4. **Changing CLI commands** → Update clap definitions in `main.rs`
 5. **Changing generated project structure** → Update `init.rs` step count and file generation
 6. **Any significant changes** → Update this `AGENTS.md` file
-7. **ANY change to the framework** → Update `llms.txt` and `llms-full.txt` to reflect the change. These files are the comprehensive user-facing documentation for AI agents building apps with Rejoice (following the llmstxt.org spec). They MUST stay perfectly in sync with the actual framework behavior. When in doubt, update them.
-8. **ANY change to the framework** → Update `/docs` to reflect the change. This is the documentation website for Rejoice, and MUST stay perfectly in sync with the actual framework behavior. When in doubt, update it.
-9. **ANY change to the framework** → Update `README.md` if the change affects user-facing features, API usage examples, or getting started instructions. The README is the first thing users see, so it must accurately reflect how the framework works.
+7. **ANY framework change** → Update `llms.txt` and `llms-full.txt`
+8. **ANY framework change** → Update `/docs` website
+9. **ANY framework change** → Update `README.md` if it affects user-facing features
+10. **When dogfooding** → Document friction in `DOGFOODING_NOTES.md`
+
+---
+
+## Key Files Reference
+
+| File | Purpose |
+|------|---------|
+| `AGENTS.md` | This file - agent instructions |
+| `DOGFOODING_NOTES.md` | Framework issues found while building Cloud |
+| `REJOICE_CLOUD_PLAN.md` | Technical plan for Rejoice Cloud |
+| `llms.txt` / `llms-full.txt` | User-facing AI documentation |
+| `README.md` | Public-facing project intro |
