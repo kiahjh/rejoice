@@ -32,6 +32,17 @@ struct ActiveDomain {
     status: String,
 }
 
+#[derive(FromRow)]
+struct PreviewEnvironment {
+    pr_number: i64,
+    pr_branch: String,
+    #[allow(dead_code)]
+    fly_app_name: String,
+    url: Option<String>,
+    #[allow(dead_code)]
+    status: String,
+}
+
 pub async fn get(state: AppState, req: Req, res: Res, id: String) -> Res {
     let github_id: i64 = match req.cookies.get("session").and_then(|s| s.parse().ok()) {
         Some(id) => id,
@@ -81,6 +92,20 @@ pub async fn get(state: AppState, req: Req, res: Res, id: String) -> Res {
         WHERE project_id = ?
         ORDER BY started_at DESC
         LIMIT 10
+        "#,
+    )
+    .bind(&id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    // Fetch active preview environments
+    let preview_environments = query_as::<_, PreviewEnvironment>(
+        r#"
+        SELECT pr_number, pr_branch, fly_app_name, url, status
+        FROM preview_environments
+        WHERE project_id = ? AND status = 'active'
+        ORDER BY created_at DESC
         "#,
     )
     .bind(&id)
@@ -244,6 +269,49 @@ pub async fn get(state: AppState, req: Req, res: Res, id: String) -> Res {
                         }))
                     }
                     
+                    // Preview environments card
+                    @if !preview_environments.is_empty() {
+                        (ui::card(html! {
+                            div class="flex items-center gap-3 mb-4" {
+                                div class="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center" {
+                                    (icon::git_branch(16))
+                                }
+                                h2 class="text-sm font-medium text-[var(--text-primary)]" { "Preview Environments" }
+                            }
+
+                            div class="space-y-2" {
+                                @for preview in &preview_environments {
+                                    @let preview_url = preview.url.as_deref().unwrap_or_else(|| {
+                                        // Should not happen, but fallback
+                                        ""
+                                    });
+                                    a
+                                        href=(preview_url)
+                                        target="_blank"
+                                        class="group flex items-center justify-between px-3 py-2.5 -mx-1 rounded-lg bg-[var(--bg-base)] border border-purple-500/20 hover:border-purple-500/40 transition-colors no-underline"
+                                    {
+                                        div class="min-w-0 flex-1" {
+                                            div class="flex items-center gap-2" {
+                                                span class="block w-1.5 h-1.5 rounded-full bg-purple-500" {}
+                                                span class="text-sm font-mono text-[var(--text-primary)] group-hover:text-purple-400 transition-colors truncate" {
+                                                    (format!("PR #{}", preview.pr_number))
+                                                }
+                                            }
+                                            div class="ml-3.5 mt-0.5 text-xs text-[var(--text-faint)] truncate" {
+                                                (icon::git_branch(10))
+                                                " "
+                                                (&preview.pr_branch)
+                                            }
+                                        }
+                                        span class="flex-shrink-0 text-[var(--text-faint)] group-hover:text-[var(--text-muted)] transition-colors" {
+                                            (icon::external_link(14))
+                                        }
+                                    }
+                                }
+                            }
+                        }))
+                    }
+
                     // Project details card
                     (ui::card(html! {
                         (ui::card_header("Details", None))

@@ -337,6 +337,87 @@ impl GitHubApp {
         ))
     }
 
+    /// Create a comment on a pull request.
+    /// Returns the comment ID (for later updates).
+    pub async fn create_pr_comment(
+        &self,
+        installation_id: i64,
+        owner: &str,
+        repo: &str,
+        pr_number: i64,
+        body: &str,
+    ) -> Result<i64, String> {
+        let token = self.get_installation_token(installation_id).await?;
+
+        let response = self
+            .client
+            .post(format!(
+                "https://api.github.com/repos/{}/{}/issues/{}/comments",
+                owner, repo, pr_number
+            ))
+            .header("Authorization", format!("Bearer {}", token))
+            .header("Accept", "application/vnd.github+json")
+            .header("User-Agent", "Rejoice-Cloud")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .json(&serde_json::json!({"body": body}))
+            .send()
+            .await
+            .map_err(|e| format!("Failed to create PR comment: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(format!("GitHub API error ({}): {}", status, body));
+        }
+
+        #[derive(Deserialize)]
+        struct CommentResponse {
+            id: i64,
+        }
+
+        let comment: CommentResponse = response
+            .json()
+            .await
+            .map_err(|e| format!("Failed to parse comment response: {}", e))?;
+
+        Ok(comment.id)
+    }
+
+    /// Update an existing comment on a pull request.
+    pub async fn update_pr_comment(
+        &self,
+        installation_id: i64,
+        owner: &str,
+        repo: &str,
+        comment_id: i64,
+        body: &str,
+    ) -> Result<(), String> {
+        let token = self.get_installation_token(installation_id).await?;
+
+        let response = self
+            .client
+            .patch(format!(
+                "https://api.github.com/repos/{}/{}/issues/comments/{}",
+                owner, repo, comment_id
+            ))
+            .header("Authorization", format!("Bearer {}", token))
+            .header("Accept", "application/vnd.github+json")
+            .header("User-Agent", "Rejoice-Cloud")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .json(&serde_json::json!({"body": body}))
+            .send()
+            .await
+            .map_err(|e| format!("Failed to update PR comment: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(format!("GitHub API error ({}): {}", status, body));
+        }
+
+        Ok(())
+    }
+
     /// Get the public installation URL for users to install the app.
     pub fn get_installation_url(&self) -> String {
         format!("https://github.com/apps/rejoice-cloud-dev/installations/new")

@@ -245,6 +245,7 @@ pub async fn post(state: AppState, req: Req, res: Res, id: String) -> Res {
         is_first_deploy,
         clone_url,
         github_installation_id: project.github_installation_id,
+        is_preview: false,
     };
 
     let db = state.db.clone();

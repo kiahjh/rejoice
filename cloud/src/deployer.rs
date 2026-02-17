@@ -7,7 +7,7 @@
 //! 4. Run `flyctl deploy` to build and deploy
 //! 5. Report status back
 
-use crate::builder::{generate_dockerfile, generate_fly_toml, ProjectInfo};
+use crate::builder::{generate_dockerfile, generate_fly_toml, generate_fly_toml_with_env, ProjectInfo};
 use rejoice::db::{query, Pool, Sqlite};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -49,6 +49,8 @@ pub struct DeployConfig {
     pub clone_url: Option<String>,
     /// GitHub App installation ID (for posting commit status)
     pub github_installation_id: Option<i64>,
+    /// Whether this is a preview deployment (sets REJOICE_ENV=preview)
+    pub is_preview: bool,
 }
 
 /// Context for GitHub status updates
@@ -203,7 +205,11 @@ pub async fn deploy(
     // Generate fly.toml
     logs.push_str("Generating fly.toml...\n");
     update_logs(&db, &deployment_id, &logs).await;
-    let fly_toml = generate_fly_toml(&config.fly_app_name, project_info.has_database, project_info.port);
+    let fly_toml = if config.is_preview {
+        generate_fly_toml_with_env(&config.fly_app_name, project_info.has_database, project_info.port, "preview")
+    } else {
+        generate_fly_toml(&config.fly_app_name, project_info.has_database, project_info.port)
+    };
     if let Err(e) = fs::write(temp_dir.join("fly.toml"), &fly_toml).await {
         cleanup_temp_dir(&temp_dir).await;
         return DeployResult {

@@ -59,9 +59,19 @@ The Rejoice Cloud dashboard is functional with:
    - Remove custom domains
    - Custom domains shown in project detail page alongside fly.dev URL
 
+9. **Preview Deployments**
+   - Auto-create preview environment on PR open/synchronize/reopen
+   - Each PR gets its own Fly app (`pr-{N}-rejoice-{project_id_prefix}`)
+   - `REJOICE_ENV=preview` set automatically for preview deploys
+   - All environment variables (including preview-only ones) injected
+   - PR comment posted/updated with preview URL, status, and branch info
+   - Auto-destroy Fly app and update PR comment when PR is closed
+   - Preview environments tracked in `preview_environments` table
+   - Active previews shown in project detail page
+
 ### What's Not Yet Implemented
 
-- Preview deployments (auto-create on PR)
+- Preview database volume setup (copy/empty/seed strategies for SQLite)
 - Database migrations at deploy time
 - Email notifications
 - Billing/usage tracking
@@ -71,11 +81,11 @@ The Rejoice Cloud dashboard is functional with:
 
 ### Codebase Notes
 
-- **23 unit tests** across 6 modules (crypto: 4, builder: 8, deployer: 3, github: 1, fly/certs: 5, domains: 2). All passing.
+- **33 unit tests** across 7 modules (crypto: 4, builder: 11, deployer: 3, github: 1, fly/certs: 5, domains: 2, webhooks/previews: 7). All passing.
 - **No test coverage** for routes, components, or integration flows.
 - The `fly.rs` module contains a full Machines REST API client and GraphQL certificates API client. Actual deployments use `flyctl` CLI via `deployer.rs`. The Machines API client may be useful for future features (preview deployment management, machine lifecycle).
 - `Counter.tsx` island is a demo/example — not used in production UI.
-- Webhook handler only processes `push` events; `pull_request` events are acknowledged in comments but not handled yet (needed for preview deployments).
+- Webhook handler processes `push` events (production deploy) and `pull_request` events (preview deploy/destroy).
 
 ---
 
@@ -382,11 +392,12 @@ Each app gets a persistent volume mounted at `/data`:
   - [x] Deploy to Fly.io
   - [ ] Run database migrations
 
-- [ ] **Preview Deployments**
-  - [ ] Auto-create on PR open/update
+- [x] **Preview Deployments**
+  - [x] Auto-create on PR open/update
   - [ ] Set up preview volume with DB (copy/empty/seed)
-  - [ ] Unique URL per PR
-  - [ ] Auto-delete on PR close (cleanup volume too)
+  - [x] Unique URL per PR
+  - [x] Auto-delete on PR close
+  - [ ] Cleanup preview volumes on PR close
 
 - [x] **Custom Domains**
   - [x] Add custom domain to project
@@ -526,11 +537,13 @@ Starting immediately, working on Cloud and framework updates in parallel.
 - [x] Auto-deploy on push
 - [x] Status checks
 
-**Phase 4: Preview Deployments (Weeks 9-10)** - NOT STARTED
-- [ ] PR webhook handling
+**Phase 4: Preview Deployments (Weeks 9-10)** ✅ MOSTLY COMPLETE
+- [x] PR webhook handling (open/synchronize/reopen/close)
 - [ ] Preview volume setup (copy/empty/seed DB)
-- [ ] Preview URL routing
-- [ ] Auto-cleanup (delete volumes on PR close)
+- [x] Preview URL routing (unique Fly app per PR)
+- [x] Auto-cleanup (destroy Fly app on PR close)
+- [x] PR comment with preview URL and status
+- [x] Preview environments shown in project detail page
 
 **Phase 5: Polish & Billing (Weeks 11-13)** - IN PROGRESS
 - [x] Custom domains
@@ -592,6 +605,16 @@ Starting immediately, working on Cloud and framework updates in parallel.
 - **Fly.io GraphQL API client**: Added `graphql()` method and certificate management methods (`add_certificate`, `get_certificate`, `check_certificate`, `list_certificates`, `delete_certificate`) to `fly.rs`.
 
 - **7 new tests**: Certificate deserialization (5 tests), hostname validation (2 tests). Total test count: 23.
+
+- **Preview deployments**: Full implementation of PR-based preview deployments. Webhook handler processes `pull_request` events (opened, synchronize, reopened, closed). Each PR gets a separate Fly app with `REJOICE_ENV=preview`. GitHub PR comments are posted/updated with preview URL and status. Preview environments are tracked in a new `preview_environments` table and shown in the project detail page. Fly apps are automatically destroyed when PRs close.
+
+- **New database table**: `preview_environments` table for tracking preview apps, PR numbers, branches, and GitHub comment IDs.
+
+- **New methods in `github.rs`**: `create_pr_comment()` and `update_pr_comment()` for managing PR comments.
+
+- **Builder enhancement**: `generate_fly_toml_with_env()` for setting `REJOICE_ENV` to any value (used for preview vs production).
+
+- **10 new tests**: PR event deserialization (3 tests), push event deserialization (1 test), preview app naming (3 tests), fly.toml env generation (3 tests). Total test count: 33.
 
 ---
 

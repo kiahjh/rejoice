@@ -148,7 +148,18 @@ CMD ["/app/app"]
 }
 
 /// Generates a fly.toml configuration file for a Rejoice app.
+/// If `rejoice_env` is provided, it overrides the default "production" value.
 pub fn generate_fly_toml(app_name: &str, has_db: bool, port: u16) -> String {
+    generate_fly_toml_with_env(app_name, has_db, port, "production")
+}
+
+/// Generates a fly.toml with a specific REJOICE_ENV value.
+pub fn generate_fly_toml_with_env(
+    app_name: &str,
+    has_db: bool,
+    port: u16,
+    rejoice_env: &str,
+) -> String {
     let mounts = if has_db {
         r#"
 [mounts]
@@ -169,7 +180,7 @@ primary_region = "iad"
 [build]
 
 [env]
-  REJOICE_ENV = "production"
+  REJOICE_ENV = "{rejoice_env}"
 
 [http_service]
   internal_port = {port}
@@ -192,6 +203,7 @@ primary_region = "iad"
   cpus = 1
 {mounts}"#,
         app_name = app_name,
+        rejoice_env = rejoice_env,
         port = port,
         mounts = mounts,
     )
@@ -265,5 +277,29 @@ mod tests {
     fn test_generate_fly_toml_custom_port() {
         let toml = generate_fly_toml("my-app", false, 3000);
         assert!(toml.contains("internal_port = 3000"));
+    }
+
+    #[test]
+    fn test_generate_fly_toml_with_env_production() {
+        let toml = generate_fly_toml_with_env("my-app", true, 8080, "production");
+        assert!(toml.contains("app = \"my-app\""));
+        assert!(toml.contains("REJOICE_ENV = \"production\""));
+        assert!(toml.contains("[mounts]"));
+        assert!(toml.contains("internal_port = 8080"));
+    }
+
+    #[test]
+    fn test_generate_fly_toml_with_env_preview() {
+        let toml = generate_fly_toml_with_env("pr-42-rejoice-abcd1234", false, 8080, "preview");
+        assert!(toml.contains("app = \"pr-42-rejoice-abcd1234\""));
+        assert!(toml.contains("REJOICE_ENV = \"preview\""));
+        assert!(!toml.contains("[mounts]"));
+    }
+
+    #[test]
+    fn test_generate_fly_toml_defaults_to_production() {
+        let toml_default = generate_fly_toml("my-app", false, 8080);
+        let toml_explicit = generate_fly_toml_with_env("my-app", false, 8080, "production");
+        assert_eq!(toml_default, toml_explicit);
     }
 }
